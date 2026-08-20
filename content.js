@@ -124,9 +124,8 @@
   .c4{--bg:#e4dcff;--ink:#6a51c2}.c5{--bg:#d5ecff;--ink:#356ea8}.c6{--bg:#ffe4d2;--ink:#c26a2f}
   .c7{--bg:#e6f7c7;--ink:#5d8a24}
 
-  /* ── 페르소나별 고유 스타일 & 뱃지 ── */
-  .p-badge{display:inline-block;padding:1px 5px;margin-right:5px;border:1.5px solid currentColor;
-           border-radius:6px;font-size:10px;line-height:1.2;font-weight:700;vertical-align:1px;opacity:.9}
+  /* ── 8비트 도트 픽셀 아이콘 & 페르소나별 고유 스타일 ── */
+  .p-icon{display:inline-block;vertical-align:-2px;margin-right:6px;image-rendering:pixelated;flex:none}
   .p-basic{--bg:#fffbf0;--ink:#7c4d12;border-color:#e5a73b;
            box-shadow:0 4px 0 rgba(160,100,20,.12),inset 0 3px 0 rgba(255,255,255,.85)}
   .p-commu{--bg:#edf3fc;--ink:#1b3874;border-color:#456db5;
@@ -197,11 +196,11 @@
   const KIND_CLS = { warn: 'k-warn', tip: 'k-tip', info: 'k-info',
                      bond: 'k-bond', answer: 'k-answer', pomo: 'p-pomo' };
   const PERSONA_INFO = {
-    basic: { name: '골든', cls: 'p-basic' },
-    commu: { name: '커뮤', cls: 'p-commu' },
-    tsun:  { name: '츤데레', cls: 'p-tsun' },
-    sunbi: { name: '선비', cls: 'p-sunbi' },
-    pomo:  { name: '뽀모', cls: 'p-pomo' },
+    basic: { icon: 'persona_basic', cls: 'p-basic' },
+    commu: { icon: 'persona_commu', cls: 'p-commu' },
+    tsun:  { icon: 'persona_tsun',  cls: 'p-tsun' },
+    sunbi: { icon: 'persona_sunbi', cls: 'p-sunbi' },
+    pomo:  { icon: 'persona_pomo',  cls: 'p-pomo' },
   };
   const PERSONA_CLS = {
     basic: 'p-basic',
@@ -697,9 +696,17 @@
     const cls = KIND_CLS[kind] || PERSONA_CLS[personaKey] || pInfo.cls || pick(CANDY);
     const b = el('div', 'bubble side ' + side + ' ' + cls, sh);
 
-    // 뱃지 태그로 페르소나 출처를 시각적으로 즉각 분류
-    const badge = el('span', 'p-badge', b);
-    badge.textContent = kind === 'warn' ? '주의' : kind === 'tip' ? '팁' : kind === 'info' ? '정보' : pInfo.name;
+    // 텍스트 글자 대신 8비트 도트 픽셀 아이콘을 직접 비트로 찍어서 배치
+    const iconName = kind === 'warn' ? 'warn'
+                   : kind === 'tip' ? 'tip'
+                   : kind === 'info' ? 'info'
+                   : (pInfo.icon || 'persona_basic');
+    if (D.ICONS[iconName]) {
+      const icCv = el('canvas', 'p-icon', b);
+      const [iw, ih] = D.iconSize(iconName);
+      icCv.width = iw * 2; icCv.height = ih * 2;
+      D.drawIcon(icCv.getContext('2d'), iconName, 2);
+    }
     b.appendChild(document.createTextNode(text));
 
     b.dataset.side = side;
@@ -734,10 +741,25 @@
 
 
   // ---------- 개 말풍선 ----------
-  function showSay(text, kind) {
+  function showSay(text, kind, opt = {}) {
     if (!dogOn()) return;
-    say.textContent = text;
-    say.className = 'bubble tail say ' + (KIND_CLS[kind] || 'k-tip');
+    say.innerHTML = '';
+    const personaKey = opt.persona || (kind === 'pomo' ? 'pomo' : activeMode());
+    const pInfo = PERSONA_INFO[personaKey] || PERSONA_INFO.basic;
+    const iconName = kind === 'pomo' ? 'persona_pomo'
+                   : kind === 'warn' ? 'warn'
+                   : kind === 'tip' ? 'tip'
+                   : kind === 'info' ? 'info'
+                   : kind === 'bond' ? 'persona_tsun'
+                   : (pInfo.icon || 'persona_basic');
+    if (D.ICONS[iconName]) {
+      const icCv = el('canvas', 'p-icon', say);
+      const [iw, ih] = D.iconSize(iconName);
+      icCv.width = iw * 2; icCv.height = ih * 2;
+      D.drawIcon(icCv.getContext('2d'), iconName, 2);
+    }
+    say.appendChild(document.createTextNode(text));
+    say.className = 'bubble tail say ' + (KIND_CLS[kind] || PERSONA_CLS[personaKey] || 'k-tip');
     say.style.fontSize = Math.round(15 * zoom()) + 'px';
     say.style.maxWidth = Math.round(264 * zoom()) + 'px';
     say.hidden = false;
@@ -953,7 +975,7 @@
     const list = LINES.pomodoro?.[mode]?.[phase] || LINES.pomodoro?.basic?.[phase] || [];
     if (!list.length) return;
     const text = pick(list);
-    showSay(text, 'pomo');
+    showSay(text, 'pomo', { persona: mode });
   }
 
   function checkPomoTick() {

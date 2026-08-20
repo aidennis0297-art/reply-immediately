@@ -93,8 +93,10 @@ for (const [st, frames] of Object.entries(D.FRAMES)) {
   }
 }
 assert.ok(D.SPEED.walk < D.SPEED.sleep, '걷기가 자기보다 빨라야 함');
-assert.ok(D.ICONS.tomato, '토마토 아이콘 없음');
-assert.ok(D.ICONS.sound, '사운드 아이콘 없음');
+for (const icon of ['tomato', 'sound', 'mute', 'persona_basic', 'persona_commu', 'persona_tsun', 'persona_sunbi', 'persona_pomo', 'warn', 'tip', 'info']) {
+  assert.ok(D.ICONS[icon], '아이콘 없음: ' + icon);
+  assert.ok(Array.isArray(D.ICONS[icon]) && D.ICONS[icon].length >= 4, '아이콘 데이터 비정상: ' + icon);
+}
 
 // ---- 확장 패키징 규칙 ----
 // 크롬은 '_' 로 시작하는 파일·폴더 이름을 시스템 예약으로 보고 확장 로드를 거부한다.

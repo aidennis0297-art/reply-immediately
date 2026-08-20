@@ -210,15 +210,83 @@
       '.oo.o..o',
       '..o.....',
     ],
+    persona_basic: [
+      '.yy..yy.',
+      'yyyyyyyy',
+      'ykyyykyy',
+      'yyyyyyyy',
+      '.yyoyy..',
+      '..yyyy..',
+    ],
+    persona_commu: [
+      '....bb..',
+      '...bbb..',
+      '..bb....',
+      '.bbbbbb.',
+      '....bb..',
+      '...bb...',
+      '..bb....',
+    ],
+    persona_tsun: [
+      '.pp.pp..',
+      'ppppppp.',
+      'ppppppp.',
+      '.ppppp..',
+      '..ppp...',
+      '...p....',
+    ],
+    persona_sunbi: [
+      '...kk...',
+      '...kk...',
+      '..kkkk..',
+      '.kkkkkk.',
+      'kkkkkkkk',
+      '..kkkk..',
+    ],
+    persona_pomo: [
+      '...gg...',
+      '..gggg..',
+      '.oorroo.',
+      'orrrrrro',
+      'orrrrrro',
+      'orrrrrro',
+      '.oorroo.',
+    ],
+    warn: [
+      '...rr...',
+      '...rr...',
+      '...rr...',
+      '...rr...',
+      '........',
+      '...rr...',
+    ],
+    tip: [
+      '..yyyy..',
+      '.yyyyyy.',
+      '.yyyyyy.',
+      '..yyyy..',
+      '..oooo..',
+      '..oooo..',
+    ],
+    info: [
+      '...bb...',
+      '........',
+      '..bbbb..',
+      '...bb...',
+      '...bb...',
+      '..bbbb..',
+    ],
   };
 
-  // '-' 감은 눈, 'O' 감은 눈(가로줄), 'p' 하트 분홍, 'r' 토마토 빨강, 'g' 초록잎, 'y' 노랑
+  // '-' 감은 눈, 'O' 감은 눈(가로줄), 'p' 하트 분홍, 'r' 빨강, 'g' 초록, 'y' 노랑/골드, 'b' 블루, 'k' 고동/먹색
   PAL['-'] = '#7a4a22';      // 감은 눈
   PAL['O'] = '#fff6fb';      // 마이크 몸통
   PAL['p'] = '#ff6f9c';      // 하트
-  PAL['r'] = '#ff4757';      // 토마토 빨강
+  PAL['r'] = '#ff4757';      // 토마토 빨강 / 경고
   PAL['g'] = '#2ed573';      // 토마토 줄기/잎
-  PAL['y'] = '#ffa502';      // 노랑
+  PAL['y'] = '#f59e0b';      // 골든 노랑/골드
+  PAL['b'] = '#3b82f6';      // 커뮤/정보 블루
+  PAL['k'] = '#4a2f18';      // 선비 갓/눈동자 고동색
 
   const pad = (rows) => {
     const out = [];
