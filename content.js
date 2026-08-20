@@ -8,7 +8,7 @@
 
   const SCALE = 3, DOG_W = D.W * SCALE, DOG_H = D.H * SCALE;
   const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 'normal',
-                     follow: true, pos: 'both', size: 100 };
+                     follow: true, pos: 'both', size: 100, edge: 16 };
   const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
   const SS = 'cheerBuddy.bubbles';
   const TICK = 100, WALK_PX = 14, SLEEP_AFTER = 75000;
@@ -145,6 +145,8 @@
   const clampX = (x) => Math.max(4, Math.min(innerWidth - DOG_W - 4, x));
   // 말풍선 크기 배율. 60~140% 사이로 설정에서 조절한다.
   const zoom = () => Math.max(0.6, Math.min(1.4, (cfg.size || 100) / 100));
+  // 화면 끝에서 얼마나 띄울지. 0이면 가장자리에 딱 붙는다.
+  const edge = () => Math.max(0, Math.min(60, cfg.edge == null ? 16 : cfg.edge));
 
   // ---------- 지금 무슨 상황인지 ----------
   const COND = /^@([a-z]+)(>=|<=|>|<)?(\d+)?\|/;
@@ -444,8 +446,9 @@
   // 좌·우 벽은 세로로, 위·아래 밴드는 가로로 흩어놓는다.
   function freeSlot(side, size) {
     const vert = side === 'left' || side === 'right';
-    const span = vert ? [innerHeight * 0.05, innerHeight * 0.86]
-                      : [6, Math.max(20, innerWidth - size - 6)];
+    const pad = Math.min(10, edge());
+    const span = vert ? [innerHeight * 0.02, innerHeight * 0.92]
+                      : [pad, Math.max(20, innerWidth - size - pad)];
     const taken = [...live].filter((b) => b.dataset.side === side).map((b) => {
       const v = parseInt(vert ? b.style.bottom : b.style.left, 10) || 0;
       return [v, v + (vert ? b.offsetHeight : b.offsetWidth)];
@@ -479,9 +482,10 @@
 
     // 좌·우는 벽에 붙여 세로로, 위·아래는 밴드 안에서 가로로 흩어놓는다.
     const vert = side === 'left' || side === 'right';
+    // 아래쪽만 개(54px) 위로 비켜서고, 나머지는 설정한 여백 안에서 화면 끝까지 붙는다.
+    const e = edge();
     const cross = opt.cross != null ? opt.cross
-      : Math.round(side === 'bottom' ? rnd(66, 132)     // 개(54px)를 피할 만큼만
-        : side === 'top' ? rnd(6, 54) : rnd(4, 38));
+      : Math.round(side === 'bottom' ? 58 + rnd(0, e) : rnd(0, e));
     b.style[side] = cross + 'px';
     b.style[vert ? 'bottom' : 'left'] = '0px';
     const main = opt.main != null ? opt.main
@@ -815,11 +819,11 @@
     if (area !== 'local') return;
     for (const k in ch) cfg[k] = ch[k].newValue;
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
-    if (('freq' in ch || 'pos' in ch || 'size' in ch) && root) {
+    if (('freq' in ch || 'pos' in ch || 'size' in ch || 'edge' in ch) && root) {
       // 자리나 크기가 바뀌었으면 지금 떠 있는 건 비우고 새로 채운다
-      if ('pos' in ch || 'size' in ch) for (const b of [...live]) kill(b);
+      if ('pos' in ch || 'size' in ch || 'edge' in ch) for (const b of [...live]) kill(b);
       if (!plan().max) { clearTimeout(nextT); for (const b of [...live]) kill(b); }
-      else schedule();
+      else { clearTimeout(nextT); nextT = setTimeout(fill, 250); }   // 바로 보여준다
     }
     if ('enabled' in ch) {
       if (cfg.enabled) start();

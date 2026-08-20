@@ -1,9 +1,23 @@
 const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 3,
-                   follow: true, pos: 'both', size: 100, apiKey: '', pets: 0 };
+                   follow: true, pos: 'both', size: 100, edge: 16, apiKey: '', pets: 0 };
 const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
 const PER_PET = 10, MAX_PET = 1000;
 const $ = (id) => document.getElementById(id);
 const save = (o) => chrome.storage.local.set(o);
+
+// 슬라이더는 드래그하는 동안 계속 값이 바뀐다.
+// 매번 저장하면 크롬의 분당 쓰기 한도에 걸려 마지막 값이 씹히므로 잠깐 모아서 쓴다.
+const pending = {};
+let saveT = 0;
+function saveSoon(o) {
+  Object.assign(pending, o);
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    const batch = { ...pending };
+    for (const k in pending) delete pending[k];
+    save(batch);
+  }, 180);
+}
 
 // 팝업 안에서도 개가 앉아서 꼬리를 흔든다
 const ctx = $('ico').getContext('2d');
@@ -33,6 +47,11 @@ function drawPosIcons(sel) {
     CB_DOG.drawIcon(b.querySelector('canvas').getContext('2d'),
       POS_ICON[b.dataset.v], 3, on ? '#b0446e' : '#c3a3b2');
   }
+}
+
+function showEdge(n) {
+  $('edgeRange').value = n;
+  $('edgeLabel').innerHTML = n === 0 ? '<b>화면에 딱 붙임</b>' : `화면 끝에서 <b>${n}px</b>`;
 }
 
 function showSize(n) {
@@ -83,6 +102,7 @@ chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   drawPosIcons(c.pos);
   showFreq(typeof c.freq === 'number' ? c.freq : (OLD_FREQ[c.freq] ?? 3));
   showSize(c.size || 100);
+  showEdge(c.edge == null ? 16 : c.edge);
   showBond(c.pets);
   showKey(c.apiKey);
   showArchive(c.archStat);
@@ -110,13 +130,19 @@ for (const [box, key] of [[$('modes'), 'mode'], [$('poss'), 'pos']]) {
 $('freqRange').oninput = (e) => {
   const n = +e.target.value;
   showFreq(n);
-  save({ freq: n });
+  saveSoon({ freq: n });
 };
 
 $('sizeRange').oninput = (e) => {
   const n = +e.target.value;
   showSize(n);
-  save({ size: n });
+  saveSoon({ size: n });
+};
+
+$('edgeRange').oninput = (e) => {
+  const n = +e.target.value;
+  showEdge(n);
+  saveSoon({ edge: n });
 };
 
 // ── 사이트별 멘트 보관함 ──
