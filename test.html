@@ -33,6 +33,7 @@
 Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
 let pets = 0;
 window.__store = {};
+window.__tabs = 3;
 window.chrome = {
   runtime: {
     getURL: (p) => p,
@@ -42,6 +43,8 @@ window.chrome = {
         pets++;
         const level = Math.floor(pets / 10);
         cb({ pets, level, line: level > before ? CB_LINES.bond[level - 1] : null });
+      } else if (m.type === 'tabs') {
+        cb(window.__tabs || 3);
       } else if (m.type === 'ask') {
         setTimeout(() => cb({ parts: ['가짜 답변 첫 줄이야', '두 번째 줄도 온다'] }), 400);
       } else cb([]);                       // AI 없이 로컬 멘트만

@@ -132,14 +132,51 @@
   const micHint = (t) => { if (footEl) footEl.textContent = t || FOOT; };
   const live = new Set();                       // 지금 떠 있는 사이드 말풍선
   const dog = { x: 60, dir: 1, state: 'sit', frame: 0, target: 0, acc: 0 };
-  let tickT = 0, nextT = 0, sayT = 0, arrive = null, rec = null;
+  let tickT = 0, nextT = 0, sayT = 0, tabT = 0, arrive = null, rec = null;
   let recent = [], queue = [], lastFetch = 0, href = location.href;
   let counts = {}, delta = {}, flushT = 0;     // 멘트별 출력 횟수 (적게 나온 것부터 고른다)
   let idleSince = Date.now(), lastScroll = 0, busy = false, lastPoke = 0;
   let mouseX = null, mouseAt = 0, nextSide = Math.random() < 0.5 ? 'left' : 'right';
+  // 지금 화면 상황. '@tabs>=8|...' 같은 조건이 붙은 멘트를 걸러내는 데 쓴다.
+  const flags = { tabs: 0, scroll: 0, stay: 0, idle: 0, long: 0, video: 0, forms: 0 };
+  let pageAt = Date.now(), flagT = 0;
   let askOpen = false;
 
   const clampX = (x) => Math.max(4, Math.min(innerWidth - DOG_W - 4, x));
+
+  // ---------- 지금 무슨 상황인지 ----------
+  const COND = /^@([a-z]+)(>=|<=|>|<)?(\d+)?\|/;
+
+  function readFlags() {
+    const doc = document.documentElement;
+    const room = Math.max(1, doc.scrollHeight - innerHeight);
+    flags.scroll = Math.min(100, Math.round((scrollY / room) * 100));
+    flags.stay = Math.round((Date.now() - pageAt) / 1000);
+    flags.idle = mouseAt ? Math.round((Date.now() - mouseAt) / 1000) : 0;
+    // textContent 는 innerText 와 달리 레이아웃을 건드리지 않아서 싸다
+    flags.long = (document.body?.textContent || '').length;
+    flags.video = [...document.querySelectorAll('video')]
+      .some((v) => !v.paused && !v.ended) ? 1 : 0;
+    flags.forms = document.querySelectorAll('input:not([type=hidden]),textarea').length;
+  }
+
+  // 열린 탭 수는 백그라운드만 안다. tabs 권한 없이 개수만 세어 온다.
+  function readTabs() {
+    try {
+      chrome.runtime.sendMessage({ type: 'tabs' }, (n) => {
+        void chrome.runtime.lastError;
+        if (typeof n === 'number') flags.tabs = n;
+      });
+    } catch (_) { /* 확장이 방금 리로드된 경우 */ }
+  }
+
+  function condOK(m) {
+    const v = flags[m[1]] || 0;
+    if (!m[2]) return v > 0;
+    const n = +m[3];
+    return m[2] === '>=' ? v >= n : m[2] === '<=' ? v <= n
+         : m[2] === '>' ? v > n : v < n;
+  }
   // 동시에 띄울 목표 개수(0~10)와, 빈자리를 채우러 오는 간격(ms)
   function plan() {
     const raw = typeof cfg.freq === 'number' ? cfg.freq : (OLD_FREQ[cfg.freq] ?? 3);
@@ -185,7 +222,7 @@
   }
 
   function unmount() {
-    clearInterval(tickT); clearTimeout(nextT); clearTimeout(sayT);
+    clearInterval(tickT); clearInterval(tabT); clearTimeout(nextT); clearTimeout(sayT);
     for (const b of live) { clearTimeout(b._t); b.remove(); }
     live.clear();
     tickT = nextT = sayT = 0;
@@ -224,7 +261,10 @@
   function tick() {
     if (document.hidden) return;
     const now = Date.now();
-    if (location.href !== href) { href = location.href; queue = []; lastFetch = 0; }
+    if (location.href !== href) {
+      href = location.href; queue = []; lastFetch = 0; pageAt = now;
+    }
+    if (now - flagT > 2000) { flagT = now; readFlags(); }
 
     follow(now);
 
@@ -248,17 +288,26 @@
   }
 
   // ---------- 멘트 고르기 ----------
+  // 지금 시간·상황에 맞는 멘트를 골라낸다.
+  // 딱 들어맞는 게 있으면 그걸 우선 보여준다 — 탭이 열두 개일 때 탭 정리 얘기가 나와야 재밌으니까.
   function pool() {
     const h = new Date().getHours();
     const src = LINES[cfg.mode] || LINES.basic;
-    const timed = [], plain = [];
+    const fit = [], plain = [];
     for (const s of src) {
-      const m = /^(\d+)-(\d+)\|/.exec(s);
-      if (!m) { plain.push(s); continue; }
-      if (h >= +m[1] && h < +m[2]) timed.push(s.slice(m[0].length));
+      const t = /^(\d+)-(\d+)\|/.exec(s);
+      if (t) {
+        if (h >= +t[1] && h < +t[2]) fit.push(s.slice(t[0].length));
+        continue;
+      }
+      const c = COND.exec(s);
+      if (c) {
+        if (condOK(c)) fit.push(s.slice(c[0].length));
+        continue;
+      }
+      plain.push(s);
     }
-    // 시간대 멘트는 30% 확률로 우선 노출
-    return (timed.length && Math.random() < 0.3) ? timed : plain.concat(timed);
+    return (fit.length && Math.random() < 0.65) ? fit : plain.concat(fit);
   }
 
   // 적게 나온 멘트부터 고른다. 다만 열에 셋은 그냥 랜덤 — 순서가 뻔해지지 않게.
@@ -706,8 +755,12 @@
     mount();
     restore();
     schedule();
+    readFlags();
+    readTabs();
     clearInterval(tickT);
     tickT = setInterval(tick, TICK);
+    clearInterval(tabT);
+    tabT = setInterval(() => { if (!document.hidden) readTabs(); }, 30000);
   }
 
   addEventListener('scroll', () => { lastScroll = Date.now(); }, { passive: true });

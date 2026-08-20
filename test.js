@@ -39,14 +39,28 @@ assert.equal(parseLines(Array.from({ length: 20 }, (_, i) => `${i + 1}. 줄`).jo
 require(path.join(dir, 'lines.js'));
 const L = globalThis.CB_LINES;
 assert.equal(L.bond.length, 100, '애정도 멘트는 정확히 100개');
+const FLAGS = ['tabs', 'scroll', 'stay', 'idle', 'long', 'video', 'forms'];
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
-  assert.ok(L[k].length >= 40, k + ' 풀이 너무 작다');
+  assert.ok(L[k].length >= 500, k + ' 풀이 500개 미만: ' + L[k].length);
   assert.equal(new Set(L[k]).size, L[k].length, k + ' 에 중복 있음');
   for (const s of L[k]) {
-    const body = s.replace(/^\d+-\d+\|/, '');
+    // 접두사는 시간대('8-11|') 또는 상황('@tabs>=8|') 하나만
+    const c = /^@([a-z]+)(>=|<=|>|<)?(\d+)?\|/.exec(s);
+    if (c) {
+      assert.ok(FLAGS.includes(c[1]), k + ' 모르는 조건 키: ' + c[1] + ' (' + s + ')');
+      assert.ok(!c[2] || c[3], k + ' 비교값이 없다: ' + s);
+    }
+    const body = s.replace(/^\d+-\d+\|/, '').replace(/^@[a-z]+(>=|<=|>|<)?\d*\|/, '');
     assert.ok(body.length <= 40, k + ' 줄이 너무 김: ' + body);
     assert.ok(!/^\d+-\d+\|/.test(body), k + ' 시간대 접두사 중복: ' + s);
+    assert.ok(!/^@/.test(body), k + ' 조건 접두사 중복: ' + s);
   }
+}
+
+// content.js 가 아는 조건 키와 lines.js 가 쓰는 키가 어긋나지 않아야 한다
+const contentSrc = fs.readFileSync(path.join(dir, 'content.js'), 'utf8');
+for (const f of FLAGS) {
+  assert.ok(contentSrc.includes(f + ':'), 'content.js 에 flags.' + f + ' 가 없다');
 }
 
 // ---- 말투 키가 프롬프트와 짝이 맞는지 ----

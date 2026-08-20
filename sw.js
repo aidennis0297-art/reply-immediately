@@ -174,6 +174,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     pet().then(send).catch(() => send(null));
     return true;
   }
+  if (msg?.type === 'tabs') {
+    chrome.tabs.query({}, (t) => send(t.length));
+    return true;
+  }
   if (msg?.type === 'ask') {
     ask(msg).then(send).catch((e) => {
       console.warn('[왈왈왈]', e.message);
