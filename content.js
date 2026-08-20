@@ -599,6 +599,25 @@
   }
 
   function nextLine() {
+    // 뽀모도로 타이머 동작 중일 때는 전용 집중/응원 멘트 풀에서만 추출!
+    if (pomo && pomo.running && pomo.mode === 'focus') {
+      const mode = activeMode();
+      const list = LINES.pomodoro_focus?.[mode] || LINES.pomodoro_focus?.basic || [];
+      if (list.length) {
+        const text = pickFrom(list);
+        remember(text);
+        return { text, kind: '', persona: mode };
+      }
+    } else if (pomo && pomo.running && (pomo.mode === 'break' || pomo.mode === 'longBreak')) {
+      const mode = activeMode();
+      const list = LINES.pomodoro_break?.[mode] || LINES.pomodoro_break?.basic || [];
+      if (list.length) {
+        const text = pickFrom(list);
+        remember(text);
+        return { text, kind: '', persona: mode };
+      }
+    }
+
     refill();
     const i = queue.findIndex((q) => q.kind !== 'tip' && !recent.includes(q.text));
     if (i >= 0 && Math.random() < 0.78) {
@@ -897,6 +916,9 @@
       play8Bit('start');
       if (pomo.mode === 'focus') sayPomo('focus_start');
       else sayPomo('break_start');
+      for (const b of [...live]) kill(b);
+      clearTimeout(nextT);
+      nextT = setTimeout(fill, 200);
     }
     savePomoState();
     updatePomoUI();

@@ -38,14 +38,18 @@ assert.equal(parseLines(Array.from({ length: 20 }, (_, i) => `${i + 1}. 줄`).jo
 // ---- 멘트 풀 ----
 require(path.join(dir, 'lines.js'));
 const L = globalThis.CB_LINES;
-assert.equal(L.bond.length, 100, '애정도 멘트는 정확히 100개');
-assert.ok(L.pomodoro, '뽀모도로 대사 풀이 없다');
-const POMO_PHASES = ['focus_start', 'focus_half', 'focus_done', 'break_start', 'break_done'];
+assert.ok(L.pomodoro_focus, '뽀모도로 집중 멘트 풀이 없다');
+assert.ok(L.pomodoro_break, '뽀모도로 휴식 멘트 풀이 없다');
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
-  assert.ok(L.pomodoro[k], '뽀모도로 ' + k + ' 페르소나가 없다');
-  for (const ph of POMO_PHASES) {
-    assert.ok(Array.isArray(L.pomodoro[k][ph]) && L.pomodoro[k][ph].length >= 3,
-      '뽀모도로 ' + k + ' ' + ph + ' 대사 부족');
+  assert.ok(L.pomodoro_focus[k] && L.pomodoro_focus[k].length >= 30, '뽀모도로 집중 ' + k + ' 풀 부족(30개 이상 필요): ' + L.pomodoro_focus?.[k]?.length);
+  assert.equal(new Set(L.pomodoro_focus[k]).size, L.pomodoro_focus[k].length, '뽀모도로 집중 ' + k + ' 에 중복 있음');
+  for (const s of L.pomodoro_focus[k]) {
+    assert.ok(s.length <= 40, '뽀모도로 집중 ' + k + ' 줄이 너무 김: ' + s);
+  }
+  assert.ok(L.pomodoro_break[k] && L.pomodoro_break[k].length >= 10, '뽀모도로 휴식 ' + k + ' 풀 부족(10개 이상 필요): ' + L.pomodoro_break?.[k]?.length);
+  assert.equal(new Set(L.pomodoro_break[k]).size, L.pomodoro_break[k].length, '뽀모도로 휴식 ' + k + ' 에 중복 있음');
+  for (const s of L.pomodoro_break[k]) {
+    assert.ok(s.length <= 40, '뽀모도로 휴식 ' + k + ' 줄이 너무 김: ' + s);
   }
 }
 const FLAGS = ['tabs', 'scroll', 'stay', 'idle', 'long', 'video', 'forms'];
