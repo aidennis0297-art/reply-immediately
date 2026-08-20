@@ -121,7 +121,7 @@ async function fetchLines({ mode, ctx }) {
 // 개한테 직접 물었을 때. 쿨다운도 캐시도 걸지 않는다 — 사용자가 기다리고 있으니까.
 async function ask({ mode, q, ctx, history }) {
   const { apiKey } = await chrome.storage.local.get({ apiKey: '' });
-  if (!apiKey) return { text: '나 아직 귀만 있고 머리가 없어... 팝업에서 API 키 넣어줘!' };
+  if (!apiKey) return { text: '나 아직 귀만 있고 머리가 없어... 팝업에서 API 키 넣어줘 멍멍!' };
   const r = await fetch(API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -151,7 +151,7 @@ async function ask({ mode, q, ctx, history }) {
     .filter((t) => t)
     .map((t) => t.slice(0, 90))
     .slice(0, 3);
-  return { parts, text: parts[0] || '음... 잘 모르겠어.' };
+  return { parts, text: parts[0] || '음... 냄새 맡아봐도 잘 모르겠어 멍!' };
 }
 
 async function pet() {

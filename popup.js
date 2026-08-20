@@ -115,7 +115,56 @@ function showKey(v) {
   el.className = ok ? 'hint ok' : 'hint';
 }
 
-chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
+// ── 뽀모도로 스트릭 & 잔디 심기 ──
+function showStreak(pomoToday, pomoHistory) {
+  const hist = pomoHistory || {};
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const curToday = (pomoToday && pomoToday.date === todayStr) ? pomoToday : { sets: 0, minutes: 0 };
+  const todaySets = curToday.sets || 0;
+  const todayMins = curToday.minutes || (todaySets * 25);
+
+  $('streakToday').innerHTML = `오늘 집중: <b>🍅 ${todaySets}세트</b> (${todayMins}분)`;
+
+  // 스트릭 계산
+  let streak = 0;
+  const checkDate = new Date();
+  if (!hist[todayStr] || hist[todayStr] <= 0) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+  while (true) {
+    const ds = checkDate.toISOString().slice(0, 10);
+    if (hist[ds] && hist[ds] > 0) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  $('streakDays').textContent = streak > 0 ? `🔥 ${streak}일 연속` : '🌱 시작해봐요!';
+
+  // 21일 잔디 그리드 렌더링
+  const grid = $('grassGrid');
+  if (grid) {
+    grid.innerHTML = '';
+    for (let i = 20; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const ds = d.toISOString().slice(0, 10);
+      const sets = (ds === todayStr) ? Math.max(todaySets, hist[ds] || 0) : (hist[ds] || 0);
+      const cell = document.createElement('i');
+      cell.className = 'g-cell ' + (sets === 0 ? 'lv0' : sets <= 2 ? 'lv1' : sets <= 4 ? 'lv2' : 'lv3');
+      cell.title = `${ds}: 🍅 ${sets}세트 (${sets * 25}분)`;
+      grid.appendChild(cell);
+    }
+  }
+
+  // 오늘 4세트 목표 달성 축하 뱃지
+  const goalEl = $('pomoGoal');
+  if (goalEl) {
+    goalEl.style.display = todaySets >= 4 ? 'block' : 'none';
+  }
+}
+
+chrome.storage.local.get({ ...DEFAULTS, archStat: null, pomoToday: null, pomoHistory: {} }, (c) => {
   showPower(c.enabled);
   $('dog').checked = c.dog !== false;
   $('follow').checked = c.follow;
@@ -133,6 +182,7 @@ chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   showBond(c.pets);
   showKey(c.apiKey);
   showArchive(c.archStat);
+  showStreak(c.pomoToday, c.pomoHistory);
 });
 
 for (const id of ['dog', 'follow', 'keepChat', 'pomoOn', 'pomoSound', 'ai']) {
@@ -207,9 +257,14 @@ $('clrArch').onclick = () => {
     () => showArchive(null));
 };
 
-// 팝업이 열려 있는 동안 다른 탭에서 쓰다듬어도 게이지가 따라 오른다
+// 팝업이 열려 있는 동안 다른 탭에서 쓰다듬거나 뽀모도로 완료해도 따라 오른다
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area !== 'local') return;
   if (ch.pets) showBond(ch.pets.newValue);
   if (ch.archStat) showArchive(ch.archStat.newValue);
+  if (ch.pomoToday || ch.pomoHistory) {
+    chrome.storage.local.get({ pomoToday: null, pomoHistory: {} }, (v) => {
+      showStreak(v.pomoToday, v.pomoHistory);
+    });
+  }
 });

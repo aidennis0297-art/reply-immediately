@@ -38,19 +38,19 @@ assert.equal(parseLines(Array.from({ length: 20 }, (_, i) => `${i + 1}. 줄`).jo
 // ---- 멘트 풀 ----
 require(path.join(dir, 'lines.js'));
 const L = globalThis.CB_LINES;
-assert.ok(L.pomodoro_focus, '뽀모도로 집중 멘트 풀이 없다');
-assert.ok(L.pomodoro_break, '뽀모도로 휴식 멘트 풀이 없다');
+assert.ok(L.pomodoro_distract, '뽀모도로 딴짓 멘트 풀이 없다');
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
-  assert.ok(L.pomodoro_focus[k] && L.pomodoro_focus[k].length >= 30, '뽀모도로 집중 ' + k + ' 풀 부족(30개 이상 필요): ' + L.pomodoro_focus?.[k]?.length);
+  assert.ok(L.pomodoro_focus[k] && L.pomodoro_focus[k].length >= 30, '뽀모도로 집중 ' + k + ' 풀 부족: ' + L.pomodoro_focus?.[k]?.length);
   assert.equal(new Set(L.pomodoro_focus[k]).size, L.pomodoro_focus[k].length, '뽀모도로 집중 ' + k + ' 에 중복 있음');
-  for (const s of L.pomodoro_focus[k]) {
-    assert.ok(s.length <= 40, '뽀모도로 집중 ' + k + ' 줄이 너무 김: ' + s);
-  }
-  assert.ok(L.pomodoro_break[k] && L.pomodoro_break[k].length >= 10, '뽀모도로 휴식 ' + k + ' 풀 부족(10개 이상 필요): ' + L.pomodoro_break?.[k]?.length);
+  for (const s of L.pomodoro_focus[k]) assert.ok(s.length <= 40, '뽀모도로 집중 ' + k + ' 줄이 너무 김: ' + s);
+
+  assert.ok(L.pomodoro_break[k] && L.pomodoro_break[k].length >= 10, '뽀모도로 휴식 ' + k + ' 풀 부족: ' + L.pomodoro_break?.[k]?.length);
   assert.equal(new Set(L.pomodoro_break[k]).size, L.pomodoro_break[k].length, '뽀모도로 휴식 ' + k + ' 에 중복 있음');
-  for (const s of L.pomodoro_break[k]) {
-    assert.ok(s.length <= 40, '뽀모도로 휴식 ' + k + ' 줄이 너무 김: ' + s);
-  }
+  for (const s of L.pomodoro_break[k]) assert.ok(s.length <= 40, '뽀모도로 휴식 ' + k + ' 줄이 너무 김: ' + s);
+
+  assert.ok(L.pomodoro_distract[k] && L.pomodoro_distract[k].length >= 15, '뽀모도로 딴짓 ' + k + ' 풀 부족: ' + L.pomodoro_distract?.[k]?.length);
+  assert.equal(new Set(L.pomodoro_distract[k]).size, L.pomodoro_distract[k].length, '뽀모도로 딴짓 ' + k + ' 에 중복 있음');
+  for (const s of L.pomodoro_distract[k]) assert.ok(s.length <= 40, '뽀모도로 딴짓 ' + k + ' 줄이 너무 김: ' + s);
 }
 const FLAGS = ['tabs', 'scroll', 'stay', 'idle', 'long', 'video', 'forms'];
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
@@ -81,6 +81,10 @@ eval(fs.readFileSync(path.join(dir, 'prompts.js'), 'utf8'));
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
   assert.ok(self.CB_PROMPTS[k], k + ' 프롬프트 없음');
   assert.ok(self.CB_PROMPTS[k].includes('[출력 형식]'), k + ' 프롬프트에 출력 형식 없음');
+  // 강아지 질문 답변은 어떤 모드에서든 항상 골든 리트리버 강아지 말투여야 한다
+  assert.ok(self.CB_ASK[k], k + ' 질문 프롬프트 없음');
+  assert.ok(self.CB_ASK[k].includes('골든 리트리버') && self.CB_ASK[k].includes('멍!'),
+    k + ' 질문 프롬프트가 강아지 말투가 아님');
 }
 
 // ---- 스프라이트 ----

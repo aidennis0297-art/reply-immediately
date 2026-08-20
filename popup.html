@@ -84,6 +84,27 @@
   #modes button[data-v="all"]:hover { background: linear-gradient(135deg, #fff5dc 0%, #e2ecfd 33%, #ffe3ef 66%, #efe3d3 100%); }
   #modes button[data-v="all"].on { background: linear-gradient(135deg, #ffe5a3 0%, #cadcff 33%, #ffbfd9 66%, #e8d0b5 100%); border-color: #7d355f; color: #2e1222; box-shadow: 0 2px 0 #8c426e; font-weight: 700; }
 
+  .pomo-streak-box { padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px;
+                     background: var(--card); }
+  .streak-head { display: flex; justify-content: space-between; align-items: center;
+                 font-size: 12px; font-weight: 700; color: #d4380d; margin-bottom: 8px; }
+  .streak-fire { color: #e65100; font-size: 11px; }
+  .grass-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
+  .g-cell { aspect-ratio: 1; border-radius: 4px; background: #f0e6eb; border: 1px solid rgba(0,0,0,.06);
+            transition: transform .15s ease; cursor: pointer; }
+  .g-cell:hover { transform: scale(1.18); z-index: 2; }
+  .g-cell.lv0 { background: #f0e6eb; }
+  .g-cell.lv1 { background: #ffc4c6; border-color: #ffa39e; }
+  .g-cell.lv2 { background: #ff7875; border-color: #f5222d; }
+  .g-cell.lv3 { background: #cf1322; border-color: #820014; box-shadow: 0 0 4px rgba(207,19,34,.4); }
+  .grass-foot { display: flex; justify-content: space-between; align-items: center;
+                font-size: 10px; color: var(--dim); margin-top: 4px; }
+  .grass-legend { display: flex; align-items: center; gap: 3px; }
+  .grass-legend .g-cell { width: 10px; height: 10px; }
+  .pomo-goal { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: #fff1f0;
+               border: 1.5px solid #ffa39e; color: #cf1322; text-align: center;
+               font-size: 11px; font-weight: 700; }
+
   .row { display: flex; align-items: center; justify-content: space-between; gap: 8px;
          padding: 9px 11px; border: 2px solid var(--line); border-radius: 12px;
          background: var(--card); cursor: pointer; user-select: none; }
@@ -118,7 +139,28 @@
     <div class="next" id="next">쓰다듬으면 애정도가 올라가요</div>
   </div>
 
-  <label class="row">강아지 보이기 <input type="checkbox" id="dog"></label>
+  <div class="sec">오늘의 집중 잔디 (뽀모도로 스트릭)</div>
+  <div class="pomo-streak-box">
+    <div class="streak-head">
+      <span id="streakToday">오늘 집중: 🍅 0세트 (0분)</span>
+      <span class="streak-fire" id="streakDays">🔥 0일 연속</span>
+    </div>
+    <div class="grass-grid" id="grassGrid"></div>
+    <div class="grass-foot">
+      <span>최근 21일</span>
+      <div class="grass-legend">
+        <span>적음</span>
+        <i class="g-cell lv0"></i>
+        <i class="g-cell lv1"></i>
+        <i class="g-cell lv2"></i>
+        <i class="g-cell lv3"></i>
+        <span>많음</span>
+      </div>
+    </div>
+    <div class="pomo-goal" id="pomoGoal" style="display:none">🎉 오늘 목표 4세트 달성! 멍멍!</div>
+  </div>
+
+  <label class="row" style="margin-top:10px">강아지 보이기 <input type="checkbox" id="dog"></label>
   <label class="row">마우스 따라오기 <input type="checkbox" id="follow"></label>
   <label class="row">대화 이어가기 <input type="checkbox" id="keepChat"></label>
   <label class="row">뽀모도로 타이머 보이기 <input type="checkbox" id="pomoOn"></label>

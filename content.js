@@ -777,11 +777,11 @@
     node.style.setProperty('--tail', (cx - left) + 'px');
   }
 
-  // 여러 줄 답변을 개가 한 줄씩 이어서 말한다
+  // 여러 줄 답변을 개가 한 줄씩 이어서 말한다 (강아지 전용 비트 아이콘과 골든 어투)
   function saySeries(parts) {
     const run = (i) => {
       if (!cfg.enabled || !root || i >= parts.length) return;
-      showSay(parts[i], 'answer');
+      showSay(parts[i], 'answer', { persona: 'basic' });
       clearTimeout(sayT);
       sayT = setTimeout(() => {
         if (i + 1 < parts.length) run(i + 1);
@@ -789,6 +789,59 @@
       }, Math.min(9000, 2400 + parts[i].length * 110));
     };
     run(0);
+  }
+
+  // ── 뽀모도로 딴짓 감지기 (Distraction Guard) ──
+  const DISTRACT_HOSTS = [
+    'youtube.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com',
+    'reddit.com', 'dcinside.com', 'fmkorea.com', 'arca.live', 'ruliweb.com',
+    'theqoo.net', 'instiz.net', 'inven.co.kr', 'clien.net', 'bobaedream.co.kr',
+    'humoruniv.com', 'comic.naver.com', 'webtoon.kakao.com', 'netflix.com',
+    'chzzk.naver.com', 'sooplive.co.kr', 'twitch.tv'
+  ];
+  let lastDistractWarn = 0;
+
+  function isDistractionSite() {
+    const host = location.hostname.toLowerCase();
+    return DISTRACT_HOSTS.some((d) => host === d || host.endsWith('.' + d));
+  }
+
+  function checkDistraction() {
+    if (!pomo || !pomo.running || pomo.mode !== 'focus') return;
+    if (!isDistractionSite()) return;
+    const now = Date.now();
+    if (now - lastDistractWarn < 25000) return; // 25초 쿨다운
+    lastDistractWarn = now;
+
+    if (dogOn()) {
+      dog.target = clampX(innerWidth / 2 - DOG_W / 2);
+      setState('walk');
+    }
+    const mode = activeMode();
+    const list = LINES.pomodoro_distract?.[mode] || LINES.pomodoro_distract?.basic || [];
+    if (list.length) {
+      const text = pick(list);
+      play8Bit('pause');
+      setTimeout(() => {
+        showSay(text, 'warn', { persona: mode });
+      }, 350);
+    }
+  }
+
+  function recordPomoCompletion() {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      chrome.storage.local.get({ pomoHistory: {}, pomoToday: null }, (d) => {
+        const hist = d.pomoHistory || {};
+        hist[today] = (hist[today] || 0) + 1;
+        const curToday = (d.pomoToday && d.pomoToday.date === today)
+          ? d.pomoToday
+          : { date: today, sets: 0, minutes: 0 };
+        curToday.sets += 1;
+        curToday.minutes += (cfg.pomoFocusMin || 25);
+        chrome.storage.local.set({ pomoHistory: hist, pomoToday: curToday });
+      });
+    } catch (_) {}
   }
 
   function hideSay() {
@@ -984,6 +1037,8 @@
     const rem = Math.max(0, Math.round((pomo.endTime - now) / 1000));
     pomo.remaining = rem;
 
+    checkDistraction();
+
     const total = pomoDuration(pomo.mode);
     if (!pomo.halfNotified && pomo.mode === 'focus' && rem <= Math.round(total / 2) && rem > 0) {
       pomo.halfNotified = true;
@@ -998,6 +1053,7 @@
       pomo.halfNotified = false;
       if (pomo.mode === 'focus') {
         pomo.sets++;
+        recordPomoCompletion();
         play8Bit('done');
         sayPomo('focus_done');
         popHearts(4);
@@ -1299,11 +1355,10 @@
   function sendAsk() {
     const q = askInput.value.trim();
     if (!q) return;
-    const mode = activeMode();
     closeAsk(false);
     setState('listen');
     busy = true;
-    showSay('음... 잠깐만!', 'answer');
+    showSay('음... 냄새 맡아보는 중이다 멍!', 'answer', { persona: 'basic' });
     let done = false;
     const answer = (parts) => {
       if (done) return;
@@ -1318,15 +1373,15 @@
     };
     try {
       chrome.runtime.sendMessage(
-        { type: 'ask', mode, q, ctx: pageContext(),
+        { type: 'ask', mode: 'basic', q, ctx: pageContext(),
           history: cfg.keepChat === false ? [] : chat.slice(-4) },
         (r) => {
           void chrome.runtime.lastError;
-          answer(r?.parts?.length ? r.parts : [r?.text || '잘 모르겠어...']);
+          answer(r?.parts?.length ? r.parts : [r?.text || '냄새 맡아봐도 잘 모르겠어 멍...']);
         }
       );
-    } catch (_) { answer(['지금은 대답을 못 하겠어...']); }
-    setTimeout(() => answer(['너무 오래 걸리네. 다시 물어봐줄래?']), 15000);
+    } catch (_) { answer(['킁킁... 지금은 대답을 못 하겠어 멍...']); }
+    setTimeout(() => answer(['너무 오래 걸리네. 다시 물어봐줄래 멍?']), 15000);
   }
 
   function poke() {
