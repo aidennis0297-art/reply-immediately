@@ -292,12 +292,11 @@
     if (document.hidden) return;
     const now = Date.now();
     if (location.href !== href) {
-      // 페이지가 바뀌면 앞 페이지에서 만든 건 전부 버린다
+      // 화면이 바뀌었으니 앞 화면 기준으로 받아둔 대사는 버린다.
+      // 다만 이미 떠 있는 말풍선은 건드리지 않는다 — 지우면 눈에 띄게 끊긴다.
       href = location.href; pageAt = now;
       saveDogPos();
       queue = []; lastFetch = 0;
-      for (const b of [...live]) drop(b);
-      clearTimeout(sayT); say.hidden = true;
     }
     if (now - flagT > 2000) { flagT = now; readFlags(); }
 
@@ -398,6 +397,8 @@
       '[class*="banner"],[class*="toast"],[id*="notice"]')]
       .map((e) => clean(e.innerText)).filter((t) => t.length > 4 && t.length < 160)[0] || '';
     const main = document.querySelector('article,main,[role="main"]') || document.body;
+    if (!main) return { host: location.hostname, site: location.hostname, url: '',
+                        title: '', head: '', desc: '', notice: '', sel: '', body: '', lang: '' };
     return {
       host: location.hostname,
       site: meta('meta[property="og:site_name"]') || location.hostname.replace(/^www\./, ''),
@@ -407,7 +408,7 @@
       desc: clean(meta('meta[name="description"]') || meta('meta[property="og:description"]')).slice(0, 180),
       notice: notice.slice(0, 160),
       sel: clean(String(getSelection() || '')).slice(0, 160),
-      body: clean(main.innerText).slice(0, 420),
+      body: clean(main.innerText || '').slice(0, 420),
       lang: document.documentElement.lang || '',
     };
   }
@@ -464,13 +465,16 @@
     if (!p.max) return;
     if (document.hidden) { nextT = setTimeout(fill, 3000); return; }
     const want = Math.round(rnd(p.min, p.max + 0.49));
-    const need = Math.min(2, want - live.size);
+    // 화면이 비어 있으면 한 번에 더 채운다. 평소에는 두 개씩만.
+    const burst = live.size === 0 ? Math.min(3, want) : 2;
+    const need = Math.min(burst, want - live.size);
+    const step = live.size === 0 ? 130 : 320;
     for (let i = 0; i < need; i++) {
       setTimeout(() => {
         if (!cfg.enabled || !root || live.size >= p.max) return;
         const item = nextLine();
         spawn(item.text, item.kind, { persona: item.persona });
-      }, i * 320);
+      }, i * step);
     }
     schedule();
   }
@@ -534,12 +538,6 @@
     setTimeout(() => b.remove(), 320);
   }
 
-  // 페이지가 바뀌었을 때처럼 즉시 치울 때
-  function drop(b) {
-    clearTimeout(b._t);
-    live.delete(b);
-    b.remove();
-  }
 
   // ---------- 개 말풍선 ----------
   function showSay(text, kind) {
@@ -561,6 +559,20 @@
     const left = Math.max(8, Math.min(innerWidth - w - 8, Math.round(cx - w / 2)));
     node.style.left = left + 'px';
     node.style.setProperty('--tail', (cx - left) + 'px');
+  }
+
+  // 여러 줄 답변을 개가 한 줄씩 이어서 말한다
+  function saySeries(parts) {
+    const run = (i) => {
+      if (!cfg.enabled || !root || i >= parts.length) return;
+      showSay(parts[i], 'answer');
+      clearTimeout(sayT);
+      sayT = setTimeout(() => {
+        if (i + 1 < parts.length) run(i + 1);
+        else hideSay();
+      }, Math.min(9000, 2400 + parts[i].length * 110));
+    };
+    run(0);
   }
 
   function hideSay() {
@@ -785,17 +797,14 @@
     closeAsk(false);
     setState('listen');
     busy = true;
-    const waiting = spawn('음... 잠깐만!', 'answer');
+    showSay('음... 잠깐만!', 'answer');
     let done = false;
     const answer = (parts) => {
       if (done) return;
       done = true;
       busy = false;
       setState('sit');
-      drop(waiting);
-      parts.slice(0, 4).forEach((t, i) => setTimeout(() => {
-        if (cfg.enabled && root) spawn(t, 'answer');
-      }, i * 800));
+      saySeries(parts.slice(0, 4));
       chat.push({ q, a: parts.join(' ').slice(0, 160) });
       if (chat.length > 8) chat.shift();
       saveChat();
@@ -845,7 +854,8 @@
   function start() {
     mount();
     loadChat();
-    schedule();
+    clearTimeout(nextT);
+    nextT = setTimeout(fill, 120);   // 새 페이지에서 빈 화면으로 시작하지 않게
     readFlags();
     readTabs();
     clearInterval(tickT);
