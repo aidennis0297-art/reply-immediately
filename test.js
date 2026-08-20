@@ -96,9 +96,10 @@ global.chrome = {
     session: { get: async (d) => d, set: async () => {} },
   },
 };
-const doPet = eval(fs.readFileSync(path.join(dir, 'sw.js'), 'utf8')
+const SW = eval(fs.readFileSync(path.join(dir, 'sw.js'), 'utf8')
   .replace(/^importScripts.*$/m, '')
-  .replace(/chrome\.(commands|runtime)[\s\S]*$/, '') + '\npet');
+  .replace(/chrome\.(commands|runtime)[\s\S]*$/, '') + '\n({ pet, archiveAdd, archiveGet })');
+const doPet = SW.pet;
 
 (async () => {
   const ups = [];
@@ -112,6 +113,31 @@ const doPet = eval(fs.readFileSync(path.join(dir, 'sw.js'), 'utf8')
   assert.equal(store.pets, 1010);
   assert.equal((await doPet()).level, 100, '1000번을 넘어도 100레벨에서 멈춘다');
 
-  console.log('통과: parse %d케이스, 멘트 %d개, 스프라이트 %d상태, 애정도 %d단계',
-    r.length, Object.values(L).flat().length, Object.keys(D.FRAMES).length, ups.length);
+  // ---- 사이트별 멘트 보관함 ----
+  store.archive = {};
+  await SW.archiveAdd('news.example.com', [
+    { text: '가', kind: '' }, { text: '나', kind: 'tip' }, { text: '가', kind: '' },
+  ]);
+  assert.equal((await SW.archiveGet('news.example.com')).length, 2, '같은 문구는 한 번만 쌓인다');
+  await SW.archiveAdd('news.example.com', [{ text: '나', kind: 'tip' }]);
+  assert.equal((await SW.archiveGet('news.example.com')).length, 2, '재방문해도 중복은 안 쌓인다');
+
+  // 사이트당 상한
+  await SW.archiveAdd('big.example.com',
+    Array.from({ length: 60 }, (_, i) => ({ text: 'L' + i, kind: '' })));
+  const big = await SW.archiveGet('big.example.com');
+  assert.equal(big.length, 40, '사이트당 40줄까지만 보관: ' + big.length);
+  assert.equal(big[big.length - 1].text, 'L59', '최신 것이 남는다');
+
+  // 사이트 수 상한
+  for (let i = 0; i < 85; i++) await SW.archiveAdd('s' + i + '.example.com', [{ text: 'x' + i, kind: '' }]);
+  assert.ok(Object.keys(store.archive).length <= 80,
+    '사이트는 80곳까지: ' + Object.keys(store.archive).length);
+  assert.equal((await SW.archiveGet('s84.example.com')).length, 1, '최근 사이트는 남아있다');
+  assert.equal((await SW.archiveGet('s0.example.com')).length, 0, '오래된 사이트는 밀려난다');
+
+  console.log('통과: parse %d케이스, 멘트 %d개(말투 %d), 스프라이트 %d상태, 애정도 %d단계, 보관함 OK',
+    r.length, Object.values(L).flat().length,
+    ['basic', 'commu', 'tsun', 'sunbi'].reduce((a, k) => a + L[k].length, 0),
+    Object.keys(D.FRAMES).length, ups.length);
 })();

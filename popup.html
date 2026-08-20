@@ -64,6 +64,8 @@
   input[type=password]:focus { outline: none; border-color: var(--pink); }
   .hint { margin-top: 5px; font-size: 11px; line-height: 1.5; color: var(--dim); word-break: keep-all; }
   .ok { color: #2b8a66; }
+  .arch { padding: 9px 11px; border: 2px solid var(--line); border-radius: 12px;
+          background: var(--card); font-size: 12px; color: var(--pink-d); }
   .tip { margin-top: 12px; padding: 8px 10px; border-radius: 10px; background: #fff0f6;
          font-size: 11px; color: #a07f92; word-break: keep-all; }
 </style>
@@ -109,6 +111,15 @@
   <div class="sec">NVIDIA API 키</div>
   <input type="password" id="apiKey" placeholder="nvapi-..." spellcheck="false">
   <p class="hint" id="keyState">build.nvidia.com 에서 받은 키를 붙여넣으세요.</p>
+
+  <div class="sec">사이트별 멘트 보관함</div>
+  <div class="arch" id="archStat">아직 모은 게 없어요</div>
+  <div class="grid" style="margin-top:6px">
+    <button id="expArch">파일로 저장</button>
+    <button id="clrArch">비우기</button>
+  </div>
+  <p class="hint">AI가 사이트마다 만든 멘트를 주소와 함께 쌓아둡니다.
+    다음에 같은 사이트에 가면 이걸 다시 써서 API를 아껴요.</p>
 
   <p class="tip"><b>Alt+F</b> 또는 개를 클릭하면 질문 창이 열립니다. 마이크로도 물어볼 수 있어요.<br>
     쓰다듬을 때마다 하트가 뜨고, 10번마다 애정도 +1.</p>

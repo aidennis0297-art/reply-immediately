@@ -17,7 +17,7 @@
   const SS = 'cheerBuddy.bubbles';
   const TICK = 100, WALK_PX = 14, SLEEP_AFTER = 75000;
   const FOLLOW_GAP = 70, FOLLOW_GIVEUP = 8000;
-  const LIFE = [4200, 11000];
+  const LIFE = [2800, 16000];
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -123,6 +123,7 @@
   const dog = { x: 60, dir: 1, state: 'sit', frame: 0, target: 0, acc: 0 };
   let tickT = 0, nextT = 0, sayT = 0, arrive = null, rec = null;
   let recent = [], queue = [], lastFetch = 0, href = location.href;
+  let counts = {}, delta = {}, flushT = 0;     // 멘트별 출력 횟수 (적게 나온 것부터 고른다)
   let idleSince = Date.now(), lastScroll = 0, busy = false, lastPoke = 0;
   let mouseX = null, mouseAt = 0, nextSide = Math.random() < 0.5 ? 'left' : 'right';
   let askOpen = false;
@@ -242,13 +243,23 @@
     return (timed.length && Math.random() < 0.3) ? timed : plain.concat(timed);
   }
 
-  function pickLocal(list) {
-    const p = list || pool();
-    for (let i = 0; i < 14; i++) {
-      const s = pick(p);
-      if (!recent.includes(s)) return s;
+  // 적게 나온 멘트부터 고른다. 다만 열에 셋은 그냥 랜덤 — 순서가 뻔해지지 않게.
+  function leastUsed(list) {
+    if (!list.length) return '';
+    if (Math.random() < 0.3) return pick(list);
+    let min = Infinity, best = [];
+    for (const t of list) {
+      const n = counts[t] || 0;
+      if (n < min) { min = n; best = [t]; }
+      else if (n === min) best.push(t);
     }
-    return pick(p);
+    return pick(best);
+  }
+
+  function pickLocal(list) {
+    const all = list || pool();
+    const fresh = all.filter((t) => !recent.includes(t));
+    return leastUsed(fresh.length ? fresh : all);
   }
 
   // 페이지에서 진짜 핵심만 뽑는다. 본문 통째로 보내면 모델이 요약을 시작한다.
@@ -261,6 +272,7 @@
       .map((e) => clean(e.innerText)).filter((t) => t.length > 4 && t.length < 160)[0] || '';
     const main = document.querySelector('article,main,[role="main"]') || document.body;
     return {
+      host: location.hostname,
       site: meta('meta[property="og:site_name"]') || location.hostname.replace(/^www\./, ''),
       url: location.pathname.slice(0, 60),
       title: clean(document.title).slice(0, 120),
@@ -288,7 +300,28 @@
     } catch (_) { /* 확장이 방금 리로드된 경우 */ }
   }
 
-  const remember = (t) => { recent.push(t); if (recent.length > 24) recent.shift(); };
+  function remember(t) {
+    recent.push(t); if (recent.length > 24) recent.shift();
+    counts[t] = (counts[t] || 0) + 1;
+    delta[t] = (delta[t] || 0) + 1;
+    clearTimeout(flushT);
+    flushT = setTimeout(flushCounts, 12000);   // 탭마다 쓰지 않게 몰아서 저장
+  }
+
+  function flushCounts() {
+    const d = delta;
+    if (!Object.keys(d).length) return;
+    delta = {};
+    try {
+      chrome.storage.local.get({ counts: {} }, (v) => {
+        void chrome.runtime.lastError;
+        const merged = v.counts || {};
+        for (const k in d) merged[k] = (merged[k] || 0) + d[k];
+        counts = merged;
+        chrome.storage.local.set({ counts: merged });
+      });
+    } catch (_) { /* 확장이 방금 리로드된 경우 */ }
+  }
 
   // 큐는 순차로 꺼내되 가끔 로컬 멘트를 섞어 예측을 깬다.
   // 꿀팁은 개 몫이라 사이드 말풍선에서는 건너뛴다.
@@ -364,8 +397,11 @@
     b.style.bottom = (opt.bottom || freeBottom(side, b.offsetHeight)) + 'px';
     live.add(b);
 
+    // 읽는 데 필요한 최소 시간에 넉넉한 편차를 곱한다.
+    // 편차가 좁으면 같이 뜬 말풍선이 같이 사라져서 눈에 띈다.
+    const need = LIFE[0] + text.length * 90;
     const dur = opt.until ? opt.until - Date.now()
-                          : Math.min(LIFE[1], LIFE[0] + text.length * 120) * rnd(0.85, 1.2);
+                          : Math.min(LIFE[1], need * rnd(0.75, 2.3));
     b._until = Date.now() + dur;
     b._t = setTimeout(() => kill(b), Math.max(1200, dur));
     persist();
@@ -636,8 +672,11 @@
     if (cfg.enabled && root && !root.isConnected) document.documentElement.appendChild(root);
   }).observe(document.documentElement, { childList: true });
 
-  chrome.storage.local.get(DEFAULTS, (v) => {
+  addEventListener('pagehide', flushCounts);
+
+  chrome.storage.local.get({ ...DEFAULTS, counts: {} }, (v) => {
     cfg = { ...DEFAULTS, ...v };
+    counts = v.counts || {};
     if (cfg.enabled) start();
   });
 

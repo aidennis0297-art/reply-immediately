@@ -8,6 +8,8 @@ const MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
 const MIN_GAP = 40000;      // 호출 간 최소 간격
 const TTL = 5 * 60 * 1000;  // 같은 페이지 재요청은 5분간 캐시로
 const PER_PET = 10, MAX_LEVEL = 100;
+const ARCH_PER_SITE = 40;   // 사이트 하나당 보관할 멘트 수
+const ARCH_SITES = 80;      // 보관할 사이트 수 (넘치면 오래된 곳부터 버린다)
 
 const TAG = { '일반': '', '팁': 'tip', '주의': 'warn', '정보': 'info' };
 
@@ -41,6 +43,37 @@ function parse(txt) {
 
 const shuffle = (a) => a.map((v) => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map((p) => p[1]);
 
+// ── 사이트별 멘트 보관함 ──────────────────────────────────────
+// AI가 만든 멘트를 사이트 주소와 함께 계속 쌓아둔다.
+// 다음에 같은 사이트에 오면 API를 안 부르고 여기서 꺼내 쓴다.
+async function archiveAdd(host, lines) {
+  if (!host || !lines.length) return;
+  const { archive } = await chrome.storage.local.get({ archive: {} });
+  const slot = archive[host] || { t: 0, v: [] };
+  const seen = new Set(slot.v.map((x) => x.text));
+  for (const l of lines) {
+    if (seen.has(l.text)) continue;
+    seen.add(l.text);
+    slot.v.push({ text: l.text, kind: l.kind, t: Date.now() });
+  }
+  if (slot.v.length > ARCH_PER_SITE) slot.v = slot.v.slice(-ARCH_PER_SITE);
+  slot.t = Date.now();
+  archive[host] = slot;
+
+  const keys = Object.keys(archive);
+  if (keys.length > ARCH_SITES) {
+    keys.sort((a, b) => archive[a].t - archive[b].t)
+      .slice(0, keys.length - ARCH_SITES)
+      .forEach((k) => delete archive[k]);
+  }
+  await chrome.storage.local.set({ archive });
+}
+
+async function archiveGet(host) {
+  const { archive } = await chrome.storage.local.get({ archive: {} });
+  return archive[host]?.v || [];
+}
+
 async function fetchLines({ mode, ctx }) {
   const { apiKey } = await chrome.storage.local.get({ apiKey: '' });
   if (!apiKey) return [];                       // 키 없으면 로컬 멘트만 쓴다
@@ -50,7 +83,8 @@ async function fetchLines({ mode, ctx }) {
   const hit = st.cache[key];
   const now = Date.now();
   if (hit && now - hit.t < TTL && hit.v.length) return shuffle(hit.v);
-  if (now - st.last < MIN_GAP) return [];       // 쿨다운 중이면 조용히 넘어간다
+  // 쿨다운 중이면 예전에 이 사이트에서 만들어 둔 멘트를 꺼내 쓴다
+  if (now - st.last < MIN_GAP) return shuffle(await archiveGet(ctx.host)).slice(0, 10);
   await chrome.storage.session.set({ last: now });
 
   const r = await fetch(API, {
@@ -71,13 +105,14 @@ async function fetchLines({ mode, ctx }) {
   if (!r.ok) throw new Error('NIM ' + r.status);
   const j = await r.json();
   const lines = parse(j.choices?.[0]?.message?.content || '');
+  await archiveAdd(ctx.host, lines);            // 사이트 주소와 함께 보관해 둔다
 
   const cache = st.cache;
   cache[key] = { t: now, v: lines };
   const keys = Object.keys(cache);
   if (keys.length > 20) delete cache[keys.sort((a, b) => cache[a].t - cache[b].t)[0]];
   await chrome.storage.session.set({ cache });
-  return lines;
+  return lines.length ? lines : shuffle(await archiveGet(ctx.host)).slice(0, 10);
 }
 
 // 개한테 직접 물었을 때. 쿨다운도 캐시도 걸지 않는다 — 사용자가 기다리고 있으니까.

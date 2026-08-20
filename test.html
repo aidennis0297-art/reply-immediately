@@ -32,6 +32,7 @@
 // 브라우저 패널이 숨어 있어도 tick 이 돌도록 hidden 을 고정한다.
 Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
 let pets = 0;
+window.__store = {};
 window.chrome = {
   runtime: {
     getURL: (p) => p,
@@ -49,7 +50,10 @@ window.chrome = {
     onMessage: { addListener: () => {} },
   },
   storage: {
-    local: { get: (d, cb) => cb({ ...d, freq: 'chatty' }), set: () => {} },
+    local: {                                   // 진짜 저장소처럼 값을 들고 있는다
+      get: (d, cb) => cb({ ...d, ...window.__store, freq: 'chatty' }),
+      set: (o, cb) => { Object.assign(window.__store, o); if (cb) cb(); },
+    },
     onChanged: { addListener: () => {} },
   },
 };

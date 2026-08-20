@@ -73,7 +73,43 @@ for (const [box, key] of [[$('modes'), 'mode'], [$('freqs'), 'freq']]) {
   };
 }
 
+// ── 사이트별 멘트 보관함 ──
+function showArchive() {
+  chrome.storage.local.get({ archive: {} }, ({ archive }) => {
+    const sites = Object.keys(archive);
+    const n = sites.reduce((a, k) => a + (archive[k].v?.length || 0), 0);
+    $('archStat').textContent = n
+      ? `${sites.length}개 사이트 · ${n}줄 모았어요`
+      : '아직 모은 게 없어요';
+  });
+}
+showArchive();
+
+$('expArch').onclick = () => {
+  chrome.storage.local.get({ archive: {}, counts: {} }, (d) => {
+    const out = {
+      만든날: new Date().toISOString().slice(0, 10),
+      사이트별멘트: d.archive,
+      멘트별출력횟수: d.counts,
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)],
+      { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'walwalwal-lines.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  });
+};
+
+$('clrArch').onclick = () => {
+  if (!confirm('모아둔 사이트별 멘트를 전부 지울까요?')) return;
+  chrome.storage.local.set({ archive: {} }, showArchive);
+};
+
 // 팝업이 열려 있는 동안 다른 탭에서 쓰다듬어도 게이지가 따라 오른다
 chrome.storage.onChanged.addListener((ch, area) => {
-  if (area === 'local' && ch.pets) showBond(ch.pets.newValue);
+  if (area !== 'local') return;
+  if (ch.pets) showBond(ch.pets.newValue);
+  if (ch.archive) showArchive();
 });
