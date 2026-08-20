@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>왈왈왈 테스트</title>
+<meta name="description" content="테스트용 더미 설명. 확장이 이 값을 읽어간다.">
+<style>
+  body { margin: 0; padding: 30px 40px 260px; background: #fafafa;
+         font: 15px/1.9 system-ui, sans-serif; color: #333; }
+  h1 { font-size: 22px; }
+  .demo { display: flex; gap: 26px; margin: 18px 0 30px; padding: 16px;
+          background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+  .demo figure { text-align: center; font: 12px monospace; color: #888; }
+  .demo canvas { image-rendering: pixelated; display: block; margin-bottom: 6px; }
+  .notice { padding: 10px 14px; background: #fff3cd; border: 1px solid #ffe08a;
+            border-radius: 8px; margin: 12px 0; }
+  p { max-width: 680px; }
+</style>
+</head>
+<body>
+  <h1>왈왈왈 테스트 페이지</h1>
+  <div class="notice" role="alert">공지: 이 페이지는 확장 동작 확인용입니다. 결제 버튼을 누르지 마세요.</div>
+  <p>아래는 스프라이트 상태별 애니메이션 데모. 화면 하단에는 실제 content.js가 붙어서 개가 돌아다닌다.
+     개를 클릭하면 하트가 뜨고 1초 뒤에 한마디 한다.</p>
+  <div class="demo" id="demo"></div>
+  <p>스크롤 테스트용 더미 문단. 말풍선이 떠 있는 동안 스크롤하면 사라지는 시간이 늘어나야 한다.</p>
+  <p>골든 리트리버는 사람을 잘 따르고 활발한 대형견이다. 이 확장은 그 성격을 도트로 옮긴 것이다.</p>
+
+<script>document.write('<scr' + 'ipt src="lines.js?t=' + Date.now() + '"><\/scr' + 'ipt>')</script>
+<script>
+// ── 확장 API 스텁 (테스트 전용) ─────────────────────────────
+// 브라우저 패널이 숨어 있어도 tick 이 돌도록 hidden 을 고정한다.
+Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+let pets = 0;
+window.chrome = {
+  runtime: {
+    getURL: (p) => p,
+    sendMessage: (m, cb) => {
+      if (m.type === 'pet') {
+        const before = Math.floor(pets / 10);
+        pets++;
+        const level = Math.floor(pets / 10);
+        cb({ pets, level, line: level > before ? CB_LINES.bond[level - 1] : null });
+      } else if (m.type === 'ask') {
+        setTimeout(() => cb({ parts: ['가짜 답변 첫 줄이야', '두 번째 줄도 온다'] }), 400);
+      } else cb([]);                       // AI 없이 로컬 멘트만
+    },
+    lastError: null,
+    onMessage: { addListener: () => {} },
+  },
+  storage: {
+    local: { get: (d, cb) => cb({ ...d, freq: 'chatty' }), set: () => {} },
+    onChanged: { addListener: () => {} },
+  },
+};
+</script>
+<script>for (const f of ["dog.js", "content.js"]) document.write('<scr' + 'ipt src="' + f + '?t=' + Date.now() + '"><\/scr' + 'ipt>')</script>
+<script>
+// 상태별 스프라이트 데모
+for (const st of ['stand', 'walk', 'sit', 'sleep']) {
+  const fig = document.createElement('figure');
+  const cv = document.createElement('canvas');
+  cv.width = CB_DOG.W * 4; cv.height = CB_DOG.H * 4;
+  fig.append(cv, document.createTextNode(st));
+  document.getElementById('demo').append(fig);
+  let f = 0;
+  const c = cv.getContext('2d');
+  CB_DOG.draw(c, st, 0, 4, false);
+  setInterval(() => CB_DOG.draw(c, st, f++, 4, st === 'walk'), CB_DOG.SPEED[st]);
+}
+</script>
+</body>
+</html>

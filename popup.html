@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>왈왈왈</title>
+<style>
+  @font-face { font-family: Galmuri11; src: url(fonts/Galmuri11.woff2) format('woff2'); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --pink: #ff8fbb; --pink-d: #b0446e; --line: #e9bdd0;
+    --paper: #fff7fb; --card: #ffffff; --ink: #5b3a4d; --dim: #a98d9b;
+  }
+  body {
+    width: 280px; padding: 14px; background: var(--paper); color: var(--ink);
+    font: 400 13px/1.6 Galmuri11, monospace; letter-spacing: .2px;
+  }
+  header { display: flex; align-items: center; gap: 9px; }
+  header .grow { flex: 1; }
+  #power { image-rendering: pixelated; cursor: pointer; padding: 6px;
+           border: 2px solid var(--line); border-radius: 11px; background: #fff;
+           box-shadow: 0 2px 0 #f2d7e3; }
+  #power.on { border-color: var(--pink-d); background: #ffd9ea; box-shadow: 0 2px 0 #e39ab8; }
+  #power:hover { filter: brightness(.97); }
+  header canvas { image-rendering: pixelated; }
+  h1 { font-size: 17px; color: var(--pink-d); line-height: 1.1; }
+  .sub { font-size: 11px; color: var(--dim); }
+
+  .bond { margin: 12px 0 4px; padding: 10px 11px; border: 2px solid var(--line);
+          border-radius: 12px; background: var(--card); }
+  .bond .top { display: flex; justify-content: space-between; align-items: baseline;
+               font-size: 12px; margin-bottom: 7px; }
+  .bond .lv { color: var(--pink-d); font-size: 13px; }
+  .bond .cnt { color: var(--dim); font-size: 11px; }
+  .gauge { height: 12px; border: 2px solid var(--pink-d); border-radius: 7px;
+           background: #ffeaf3; overflow: hidden; }
+  .gauge i { display: block; height: 100%; width: 0;
+             background: repeating-linear-gradient(90deg, #ff8fbb 0 4px, #ff9ec4 4px 8px);
+             transition: width .4s ease; }
+  .bond .next { margin-top: 6px; font-size: 11px; color: var(--dim); }
+
+  .sec { margin: 13px 0 6px; font-size: 12px; color: var(--dim); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  button {
+    padding: 7px 0; line-height: 1.35; border: 2px solid var(--line); border-radius: 10px;
+    background: var(--card); color: #a86b87; font: inherit; font-size: 12px;
+    cursor: pointer; box-shadow: 0 2px 0 #f2d7e3;
+  }
+  button small { display: block; font-size: 10px; opacity: .68; }
+  button:hover:not(:disabled) { background: #fff0f6; }
+  button.on { background: #ffd9ea; border-color: var(--pink-d); color: #8e2f56;
+              box-shadow: 0 2px 0 #e39ab8; }
+  button:disabled { opacity: .45; cursor: default; box-shadow: none; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+         padding: 9px 11px; border: 2px solid var(--line); border-radius: 12px;
+         background: var(--card); cursor: pointer; user-select: none; }
+  .row + .row { margin-top: 7px; }
+  input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--pink); cursor: pointer; }
+  input[type=password] {
+    width: 100%; padding: 8px 10px; border: 2px solid var(--line); border-radius: 10px;
+    background: var(--card); font: inherit; font-size: 12px; color: var(--ink);
+  }
+  input[type=password]:focus { outline: none; border-color: var(--pink); }
+  .hint { margin-top: 5px; font-size: 11px; line-height: 1.5; color: var(--dim); word-break: keep-all; }
+  .ok { color: #2b8a66; }
+  .tip { margin-top: 12px; padding: 8px 10px; border-radius: 10px; background: #fff0f6;
+         font-size: 11px; color: #a07f92; word-break: keep-all; }
+</style>
+</head>
+<body>
+  <header>
+    <canvas id="ico" width="72" height="48"></canvas>
+    <div class="grow">
+      <h1>왈왈왈</h1>
+      <div class="sub" id="powerLabel">켜짐</div>
+    </div>
+    <canvas id="power" width="27" height="27" title="켜기 / 끄기"></canvas>
+  </header>
+
+  <div class="bond">
+    <div class="top"><span class="lv" id="lv">애정도 Lv.0</span><span class="cnt" id="cnt">0 / 1000</span></div>
+    <div class="gauge"><i id="fill"></i></div>
+    <div class="next" id="next">쓰다듬으면 애정도가 올라가요</div>
+  </div>
+
+  <label class="row">마우스 따라오기 <input type="checkbox" id="follow"></label>
+
+  <div class="sec">말투</div>
+  <div class="grid" id="modes">
+    <button data-v="basic">기본</button>
+    <button data-v="commu">커뮤</button>
+    <button data-v="tsun">츤데레</button>
+    <button data-v="sunbi">선비</button>
+  </div>
+
+  <div class="sec">수다 빈도 — 화면에 동시에 뜨는 말풍선 수</div>
+  <div class="grid three" id="freqs">
+    <button data-v="quiet">조용<br><small>0개</small></button>
+    <button data-v="normal">보통<br><small>2~3개</small></button>
+    <button data-v="chatty">수다쟁이<br><small>5~7개</small></button>
+  </div>
+
+  <div class="sec">화면 읽고 드립치기</div>
+  <label class="row">AI 멘트 켜기 <input type="checkbox" id="ai"></label>
+  <p class="hint">켜면 보고 있는 페이지의 제목·설명·본문 일부가 NVIDIA API로 전송됩니다.
+    공지나 주의할 것도 같이 알려줘요. 끄면 내장 멘트만 씁니다.</p>
+
+  <div class="sec">NVIDIA API 키</div>
+  <input type="password" id="apiKey" placeholder="nvapi-..." spellcheck="false">
+  <p class="hint" id="keyState">build.nvidia.com 에서 받은 키를 붙여넣으세요.</p>
+
+  <p class="tip"><b>Alt+F</b> 또는 개를 클릭하면 질문 창이 열립니다. 마이크로도 물어볼 수 있어요.<br>
+    쓰다듬을 때마다 하트가 뜨고, 10번마다 애정도 +1.</p>
+
+  <script src="dog.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

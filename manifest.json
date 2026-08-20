@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "왈왈왈 — 도트 응원단",
+  "version": "1.1.0",
+  "description": "도트 강아지가 화면 옆에서 응원하고, 위험한 버튼을 알려주고, 질문에 답해줍니다.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://integrate.api.nvidia.com/*"
+  ],
+  "background": {
+    "service_worker": "sw.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "lines.js",
+        "dog.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "왈왈왈",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fonts/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "commands": {
+    "ask": {
+      "suggested_key": {
+        "default": "Alt+F"
+      },
+      "description": "강아지에게 질문하기"
+    }
+  }
+}
