@@ -63,6 +63,27 @@
               box-shadow: 0 2px 0 #e39ab8; }
   button:disabled { opacity: .45; cursor: default; box-shadow: none; }
 
+  /* 말투 버튼별 고유 컬러 */
+  #modes button[data-v="basic"] { border-color: #e5a73b; color: #7c4d12; background: #fffdf5; }
+  #modes button[data-v="basic"]:hover { background: #fff6de; }
+  #modes button[data-v="basic"].on { background: #ffecc2; border-color: #b87a14; color: #5a3203; box-shadow: 0 2px 0 #c28821; font-weight: 700; }
+
+  #modes button[data-v="commu"] { border-color: #6b8ecf; color: #1b3874; background: #f4f8ff; }
+  #modes button[data-v="commu"]:hover { background: #eaf1fc; }
+  #modes button[data-v="commu"].on { background: #d9e6fc; border-color: #1b3874; color: #0d224d; box-shadow: 0 2px 0 #284c8a; font-weight: 700; }
+
+  #modes button[data-v="tsun"] { border-color: #f06292; color: #b82b6c; background: #fff5f8; }
+  #modes button[data-v="tsun"]:hover { background: #ffe9f0; }
+  #modes button[data-v="tsun"].on { background: #ffd9ea; border-color: #b0446e; color: #7a1f45; box-shadow: 0 2px 0 #d93d72; font-weight: 700; }
+
+  #modes button[data-v="sunbi"] { border-color: #a8784d; color: #523418; background: #fbf6f0; }
+  #modes button[data-v="sunbi"]:hover { background: #f4ebde; }
+  #modes button[data-v="sunbi"].on { background: #ebd8c3; border-color: #5c3a1e; color: #381f08; box-shadow: 0 2px 0 #6e4420; font-weight: 700; }
+
+  #modes button[data-v="all"] { background: linear-gradient(135deg, #fffbf0 0%, #edf3fc 33%, #fff0f6 66%, #f6eee4 100%); border-color: #b88ba2; color: #5b3a4d; }
+  #modes button[data-v="all"]:hover { background: linear-gradient(135deg, #fff5dc 0%, #e2ecfd 33%, #ffe3ef 66%, #efe3d3 100%); }
+  #modes button[data-v="all"].on { background: linear-gradient(135deg, #ffe5a3 0%, #cadcff 33%, #ffbfd9 66%, #e8d0b5 100%); border-color: #7d355f; color: #2e1222; box-shadow: 0 2px 0 #8c426e; font-weight: 700; }
+
   .row { display: flex; align-items: center; justify-content: space-between; gap: 8px;
          padding: 9px 11px; border: 2px solid var(--line); border-radius: 12px;
          background: var(--card); cursor: pointer; user-select: none; }
@@ -112,7 +133,7 @@
     <button data-v="all" style="grid-column:1/-1">모두<small>말풍선 색으로 구분</small></button>
   </div>
   <p class="hint">모두를 고르면 네 말투가 섞여 나와요.
-    커뮤는 남색, 선비는 고동색, 츤데레는 하트 무늬, 기본은 알록달록.</p>
+    기본은 골드, 커뮤는 남색, 츤데레는 핑크, 선비는 고동색.</p>
 
   <div class="sec">말풍선 위치</div>
   <div class="grid five" id="poss">
