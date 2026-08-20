@@ -41,6 +41,14 @@
   .sec { margin: 13px 0 6px; font-size: 12px; color: var(--dim); }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .grid.five { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .grid.five button { padding: 5px 0; }
+  .grid.five canvas { image-rendering: pixelated; display: block; margin: 0 auto; }
+  .rangeBox { padding: 10px 11px 8px; border: 2px solid var(--line); border-radius: 12px;
+              background: var(--card); }
+  .rangeBox input[type=range] { width: 100%; accent-color: var(--pink); cursor: pointer; }
+  .rangeLabel { margin-top: 4px; font-size: 11px; color: var(--dim); text-align: center; }
+  .rangeLabel b { color: var(--pink-d); font-size: 13px; }
   button {
     padding: 7px 0; line-height: 1.35; border: 2px solid var(--line); border-radius: 10px;
     background: var(--card); color: #a86b87; font: inherit; font-size: 12px;
@@ -77,7 +85,7 @@
       <h1>왈왈왈</h1>
       <div class="sub" id="powerLabel">켜짐</div>
     </div>
-    <canvas id="power" width="27" height="27" title="켜기 / 끄기"></canvas>
+    <canvas id="power" width="33" height="30" title="켜기 / 끄기"></canvas>
   </header>
 
   <div class="bond">
@@ -96,11 +104,19 @@
     <button data-v="sunbi">선비</button>
   </div>
 
-  <div class="sec">수다 빈도 — 화면에 동시에 뜨는 말풍선 수</div>
-  <div class="grid three" id="freqs">
-    <button data-v="quiet">조용<br><small>0개</small></button>
-    <button data-v="normal">보통<br><small>2~3개</small></button>
-    <button data-v="chatty">수다쟁이<br><small>5~7개</small></button>
+  <div class="sec">말풍선 위치</div>
+  <div class="grid five" id="poss">
+    <button data-v="left" title="왼쪽만"><canvas width="33" height="18"></canvas></button>
+    <button data-v="right" title="오른쪽만"><canvas width="33" height="18"></canvas></button>
+    <button data-v="both" title="양옆"><canvas width="33" height="18"></canvas></button>
+    <button data-v="top" title="위쪽"><canvas width="33" height="18"></canvas></button>
+    <button data-v="bottom" title="아래쪽"><canvas width="33" height="18"></canvas></button>
+  </div>
+
+  <div class="sec">수다 빈도</div>
+  <div class="rangeBox">
+    <input type="range" id="freqRange" min="0" max="10" step="1" value="3">
+    <div class="rangeLabel" id="freqLabel">동시에 <b>3</b>개</div>
   </div>
 
   <div class="sec">화면 읽고 드립치기</div>

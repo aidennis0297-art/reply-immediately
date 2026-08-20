@@ -51,10 +51,16 @@ window.chrome = {
   },
   storage: {
     local: {                                   // 진짜 저장소처럼 값을 들고 있는다
-      get: (d, cb) => cb({ ...d, ...window.__store, freq: 'chatty' }),
-      set: (o, cb) => { Object.assign(window.__store, o); if (cb) cb(); },
+      get: (d, cb) => cb({ ...d, ...window.__store, freq: 7 }),
+      set: (o, cb) => {
+        const ch = {};
+        for (const k in o) ch[k] = { newValue: o[k], oldValue: window.__store[k] };
+        Object.assign(window.__store, o);
+        if (cb) cb();
+        (window.__onChanged || []).forEach && window.__onChanged.forEach(f => f(ch, 'local'));
+      },
     },
-    onChanged: { addListener: () => {} },
+    onChanged: { addListener: (fn) => { (window.__onChanged = window.__onChanged || []).push(fn); } },
   },
 };
 </script>

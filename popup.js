@@ -1,4 +1,6 @@
-const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 'normal', follow: true, apiKey: '', pets: 0 };
+const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 3,
+                   follow: true, pos: 'both', apiKey: '', pets: 0 };
+const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
 const PER_PET = 10, MAX_PET = 1000;
 const $ = (id) => document.getElementById(id);
 const save = (o) => chrome.storage.local.set(o);
@@ -21,6 +23,22 @@ $('power').onclick = () => {
   showPower(on);
   save({ enabled: on });
 };
+
+// 말풍선 위치 아이콘 5개
+const POS_ICON = { left: 'posLeft', right: 'posRight', both: 'posBoth',
+                   top: 'posTop', bottom: 'posBottom' };
+function drawPosIcons(sel) {
+  for (const b of $('poss').querySelectorAll('button[data-v]')) {
+    const on = b.dataset.v === sel;
+    CB_DOG.drawIcon(b.querySelector('canvas').getContext('2d'),
+      POS_ICON[b.dataset.v], 3, on ? '#b0446e' : '#c3a3b2');
+  }
+}
+
+function showFreq(n) {
+  $('freqRange').value = n;
+  $('freqLabel').innerHTML = n === 0 ? '<b>안 띄움</b>' : `동시에 <b>${n}</b>개`;
+}
 
 function paint(box, val) {
   for (const b of box.querySelectorAll('button[data-v]')) b.classList.toggle('on', b.dataset.v === val);
@@ -50,7 +68,9 @@ chrome.storage.local.get(DEFAULTS, (c) => {
   $('ai').checked = c.ai;
   $('apiKey').value = c.apiKey;
   paint($('modes'), c.mode);
-  paint($('freqs'), c.freq);
+  paint($('poss'), c.pos);
+  drawPosIcons(c.pos);
+  showFreq(typeof c.freq === 'number' ? c.freq : (OLD_FREQ[c.freq] ?? 3));
   showBond(c.pets);
   showKey(c.apiKey);
 });
@@ -64,14 +84,21 @@ $('apiKey').onchange = (e) => {
   showKey(v);
 };
 
-for (const [box, key] of [[$('modes'), 'mode'], [$('freqs'), 'freq']]) {
+for (const [box, key] of [[$('modes'), 'mode'], [$('poss'), 'pos']]) {
   box.onclick = (e) => {
     const b = e.target.closest('button[data-v]');
     if (!b) return;
     paint(box, b.dataset.v);
+    if (key === 'pos') drawPosIcons(b.dataset.v);
     save({ [key]: b.dataset.v });
   };
 }
+
+$('freqRange').oninput = (e) => {
+  const n = +e.target.value;
+  showFreq(n);
+  save({ freq: n });
+};
 
 // ── 사이트별 멘트 보관함 ──
 function showArchive() {

@@ -156,15 +156,32 @@
       '..ooo..',
     ],
     power: [
-      '....o....',
-      '...ooo...',
-      '.oo.o.oo.',
-      'o...o...o',
-      'o.......o',
-      'o.......o',
-      '.o.....o.',
-      '..ooooo..',
-      '...ooo...',
+      '.....o.....',
+      '.....o.....',
+      '..oo.o.oo..',
+      '.o.......o.',
+      'o.........o',
+      'o.........o',
+      'o.........o',
+      '.o.......o.',
+      '..oo...oo..',
+      '....ooo....',
+    ],
+    // 말풍선을 화면 어디에 띄울지 고르는 아이콘들 (작은 화면 그림)
+    posRight: [
+      'ooooooooo', 'o.......o', 'o....pppo', 'o....pppo', 'o.......o', 'ooooooooo',
+    ],
+    posLeft: [
+      'ooooooooo', 'o.......o', 'oppp....o', 'oppp....o', 'o.......o', 'ooooooooo',
+    ],
+    posBoth: [
+      'ooooooooo', 'o.......o', 'oppp.pppo', 'oppp.pppo', 'o.......o', 'ooooooooo',
+    ],
+    posTop: [
+      'ooooooooo', 'opppppppo', 'opppppppo', 'o.......o', 'o.......o', 'ooooooooo',
+    ],
+    posBottom: [
+      'ooooooooo', 'o.......o', 'o.......o', 'opppppppo', 'opppppppo', 'ooooooooo',
     ],
   };
 

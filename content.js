@@ -7,17 +7,16 @@
   if (!D || !LINES || window.top !== window) return;   // 아이프레임에는 안 붙인다
 
   const SCALE = 3, DOG_W = D.W * SCALE, DOG_H = D.H * SCALE;
-  const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 'normal', follow: true };
-  // 화면에 동시에 떠 있을 말풍선 수와, 빈자리를 채우러 오는 간격(ms)
-  const PLAN = {
-    quiet: { min: 0, max: 0, gap: [0, 0] },
-    normal: { min: 2, max: 3, gap: [1500, 3200] },
-    chatty: { min: 5, max: 7, gap: [420, 1100] },
-  };
+  const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 'normal',
+                     follow: true, pos: 'both' };
+  const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
   const SS = 'cheerBuddy.bubbles';
   const TICK = 100, WALK_PX = 14, SLEEP_AFTER = 75000;
   const FOLLOW_GAP = 70, FOLLOW_GIVEUP = 8000;
   const LIFE = [2800, 16000];
+  // 말풍선을 화면 어디에 띄울지
+  const SIDES = { right: ['right'], left: ['left'], both: ['left', 'right'],
+                  top: ['top'], bottom: ['bottom'] };
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -54,6 +53,16 @@
                  to{opacity:1;transform:none}}
   @keyframes inR{from{opacity:0;transform:translateX(34px) scale(.88)}
                  to{opacity:1;transform:none}}
+  .side.top{animation:inT .38s cubic-bezier(.2,1.5,.4,1) both}
+  .side.bottom{animation:inB .38s cubic-bezier(.2,1.5,.4,1) both}
+  @keyframes inT{from{opacity:0;transform:translateY(-30px) scale(.9)}
+                 to{opacity:1;transform:none}}
+  @keyframes inB{from{opacity:0;transform:translateY(30px) scale(.9)}
+                 to{opacity:1;transform:none}}
+  .side.top.out{animation:outT .3s ease-in forwards}
+  .side.bottom.out{animation:outB .3s ease-in forwards}
+  @keyframes outT{to{opacity:0;transform:translateY(-22px) scale(.92)}}
+  @keyframes outB{to{opacity:0;transform:translateY(22px) scale(.92)}}
   .side.left.out{animation:outL .3s ease-in forwards}
   .side.right.out{animation:outR .3s ease-in forwards}
   @keyframes outL{to{opacity:0;transform:translateX(-24px) scale(.9)}}
@@ -118,7 +127,9 @@
                      bond: 'k-bond', answer: 'k-answer' };
 
   let cfg = { ...DEFAULTS };
-  let root, sh, cv, ctx, say, zzz, askEl, askInput, micEl;
+  let root, sh, cv, ctx, say, zzz, askEl, askInput, micEl, footEl;
+  const FOOT = 'Enter 로 보내기 · Esc 로 닫기 · 대답은 양옆 말풍선으로 나와';
+  const micHint = (t) => { if (footEl) footEl.textContent = t || FOOT; };
   const live = new Set();                       // 지금 떠 있는 사이드 말풍선
   const dog = { x: 60, dir: 1, state: 'sit', frame: 0, target: 0, acc: 0 };
   let tickT = 0, nextT = 0, sayT = 0, arrive = null, rec = null;
@@ -129,7 +140,14 @@
   let askOpen = false;
 
   const clampX = (x) => Math.max(4, Math.min(innerWidth - DOG_W - 4, x));
-  const plan = () => PLAN[cfg.freq] || PLAN.normal;
+  // 동시에 띄울 목표 개수(0~10)와, 빈자리를 채우러 오는 간격(ms)
+  function plan() {
+    const raw = typeof cfg.freq === 'number' ? cfg.freq : (OLD_FREQ[cfg.freq] ?? 3);
+    const max = Math.max(0, Math.min(10, Math.round(raw)));
+    if (!max) return { min: 0, max: 0, gap: [0, 0] };
+    return { min: Math.max(1, max - 1), max,
+             gap: [Math.max(320, 3000 / max), Math.max(900, 7000 / max)] };
+  }
 
   // ---------- 화면 붙이기 ----------
   function el(tag, cls, parent) {
@@ -369,32 +387,53 @@
     schedule();
   }
 
-  // 같은 쪽에 이미 뜬 말풍선과 세로로 겹치지 않는 자리를 찾는다.
-  function freeBottom(side, height) {
-    const taken = [...live].filter((b) => b.dataset.side === side)
-      .map((b) => [parseInt(b.style.bottom, 10) || 0,
-                   (parseInt(b.style.bottom, 10) || 0) + b.offsetHeight]);
+  // 같은 자리에 이미 뜬 말풍선과 겹치지 않는 위치를 찾는다.
+  // 좌·우 벽은 세로로, 위·아래 밴드는 가로로 흩어놓는다.
+  function freeSlot(side, size) {
+    const vert = side === 'left' || side === 'right';
+    const span = vert ? [innerHeight * 0.08, innerHeight * 0.82]
+                      : [10, Math.max(20, innerWidth - size - 10)];
+    const taken = [...live].filter((b) => b.dataset.side === side).map((b) => {
+      const v = parseInt(vert ? b.style.bottom : b.style.left, 10) || 0;
+      return [v, v + (vert ? b.offsetHeight : b.offsetWidth)];
+    });
     for (let i = 0; i < 24; i++) {
-      const b = Math.round(innerHeight * rnd(0.08, 0.82));
-      if (taken.every(([lo, hi]) => b + height + 12 < lo || b > hi + 12)) return b;
+      const v = Math.round(rnd(span[0], span[1]));
+      if (taken.every(([lo, hi]) => v + size + 14 < lo || v > hi + 14)) return v;
     }
-    return Math.round(innerHeight * rnd(0.08, 0.82));
+    return Math.round(rnd(span[0], span[1]));
+  }
+
+  function nextPlace() {
+    const list = SIDES[cfg.pos] || SIDES.both;
+    if (list.length === 1) return list[0];
+    const s = nextSide;
+    nextSide = s === 'left' ? 'right' : 'left';
+    return s;
   }
 
   // 크기도 색도 높이도 매번 다르게 — 같은 자리에 같은 말풍선이 반복되지 않게.
   function spawn(text, kind, opt = {}) {
-    const side = opt.side || nextSide;
-    if (!opt.side) nextSide = side === 'left' ? 'right' : 'left';
+    const side = opt.side || nextPlace();
     const b = el('div', 'bubble side ' + side + ' ' +
                  (opt.cls || KIND_CLS[kind] || pick(CANDY)), sh);
     b.textContent = text;
     b.dataset.side = side;
     b.style.fontSize = (opt.size || Math.round(rnd(13, 18.9))) + 'px';
     b.style.maxWidth = (opt.width || Math.round(rnd(170, 320))) + 'px';
-    b.style[side] = (opt.edge || Math.round(rnd(12, 96))) + 'px';
-    b.style.bottom = '0px';
     if (opt.quiet) b.classList.add('quiet');
-    b.style.bottom = (opt.bottom || freeBottom(side, b.offsetHeight)) + 'px';
+
+    // 좌·우는 벽에 붙여 세로로, 위·아래는 밴드 안에서 가로로 흩어놓는다.
+    const vert = side === 'left' || side === 'right';
+    const cross = opt.cross != null ? opt.cross
+      : Math.round(side === 'bottom' ? rnd(74, 200)
+        : side === 'top' ? rnd(14, 130) : rnd(12, 96));
+    b.style[side] = cross + 'px';
+    b.style[vert ? 'bottom' : 'left'] = '0px';
+    const main = opt.main != null ? opt.main
+      : freeSlot(side, vert ? b.offsetHeight : b.offsetWidth);
+    b.style[vert ? 'bottom' : 'left'] = main + 'px';
+    b._pos = { cross, main };
     live.add(b);
 
     // 읽는 데 필요한 최소 시간에 넉넉한 편차를 곱한다.
@@ -481,8 +520,8 @@
     const send = el('button', null, row);
     send.textContent = '물어보기';
     send.addEventListener('click', sendAsk);
-    el('div', 'foot', askEl).textContent =
-      'Enter 로 보내기 · Esc 로 닫기 · 대답은 양옆 말풍선으로 나와';
+    footEl = el('div', 'foot', askEl);
+    micHint('');
 
     askInput.addEventListener('keydown', (e) => {
       e.stopPropagation();                    // 사이트 단축키와 안 부딪히게
@@ -513,36 +552,69 @@
     if (tip) showSay(nextTip(), 'tip');
   }
 
+  const MIC_ERR = {
+    'not-allowed': '마이크가 막혀 있어. 주소창 왼쪽 자물쇠 → 마이크 → 허용!',
+    'service-not-allowed': '브라우저가 음성 인식을 막았어. 타자로 써줘!',
+    'audio-capture': '마이크를 못 찾겠어. 연결됐는지 봐줄래?',
+    'network': '인터넷이 불안한가 봐. 타자로 써줘!',
+    'aborted': '',
+  };
+
   function stopMic() {
     if (rec) { try { rec.stop(); } catch (_) {} rec = null; }
     micEl.classList.remove('rec');
   }
 
-  function toggleMic() {
-    if (rec) { stopMic(); askInput.placeholder = '타자로 써도 돼!'; return; }
-    if (!SR) { askInput.placeholder = '음성 인식이 안 되는 브라우저야. 타자로!'; return; }
+  // 권한을 먼저 받아야 한다. 바로 start() 하면 크롬이 프롬프트도 안 띄우고
+  // not-allowed 로 끝내버려서 "누르자마자 꺼진다"처럼 보인다.
+  async function toggleMic() {
+    if (rec) { stopMic(); micHint('멈췄어. 타자로 써도 돼!'); return; }
+    if (!SR) { micHint('이 브라우저는 음성 인식이 안 돼. 타자로 써줘!'); return; }
+    if (!isSecureContext) { micHint('이 사이트(http)에선 마이크가 안 돼. 타자로 써줘!'); return; }
+    micHint('마이크 준비 중...');
+    try {
+      const st = await navigator.permissions?.query({ name: 'microphone' }).catch(() => null);
+      if (st && st.state === 'denied') {
+        micHint('마이크가 차단돼 있어. 주소창 왼쪽 자물쇠 → 마이크 → 허용!');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());   // 권한만 확인하고 바로 끈다
+    } catch (e) {
+      micHint(e && e.name === 'NotAllowedError'
+        ? '마이크를 막아놨네. 주소창 왼쪽 자물쇠 → 마이크 → 허용!'
+        : '마이크를 못 열었어. 타자로 써줘!');
+      return;
+    }
+    startRec(false);
+  }
+
+  function startRec(isRetry) {
     try {
       rec = new SR();
       rec.lang = 'ko-KR';
       rec.interimResults = true;
       rec.maxAlternatives = 1;
       rec.onresult = (e) => {
-        askInput.value = [...e.results].map((r) => r[0].transcript).join('').trim();
-        if (e.results[e.results.length - 1].isFinal) { stopMic(); sendAsk(); }
+        const t = [...e.results].map((r) => r[0].transcript).join('').trim();
+        askInput.value = t;
+        if (t) micHint('“' + t + '”');
+        if (e.results[e.results.length - 1].isFinal && t) { stopMic(); sendAsk(); }
       };
       rec.onerror = (e) => {
         stopMic();
-        askInput.placeholder = e.error === 'not-allowed'
-          ? '마이크가 막혀 있어. 주소창 옆에서 허용해줘!'
-          : '잘 못 들었어. 타자로 써줄래?';
+        // 말을 시작하기 전에 끊기는 일이 잦아서 한 번은 더 들어준다
+        if (e.error === 'no-speech' && !isRetry) { micHint('안 들려. 다시 말해줘!'); startRec(true); return; }
+        if (e.error === 'no-speech') { micHint('아무 말도 안 들렸어. 다시 눌러줘!'); return; }
+        micHint(MIC_ERR[e.error] || '잘 못 들었어. 타자로 써줄래?');
       };
-      rec.onend = () => { if (rec) stopMic(); };
+      rec.onend = () => { if (rec) { stopMic(); micHint(''); } };
       rec.start();
       micEl.classList.add('rec');
-      askInput.placeholder = '듣고 있어...';
+      micHint('듣고 있어... 다시 누르면 멈춰');
     } catch (_) {
       stopMic();
-      askInput.placeholder = '마이크를 못 열었어. 타자로 써줘!';
+      micHint('마이크를 못 열었어. 타자로 써줘!');
     }
   }
 
@@ -613,8 +685,7 @@
         .replace(' quiet', '').replace(' out', ''),
       size: parseInt(b.style.fontSize, 10),
       width: parseInt(b.style.maxWidth, 10),
-      bottom: parseInt(b.style.bottom, 10),
-      edge: parseInt(b.style[b.dataset.side], 10),
+      main: b._pos?.main, cross: b._pos?.cross,
     }));
     if (list.length) sessionStorage.setItem(SS, JSON.stringify(list));
     else sessionStorage.removeItem(SS);
@@ -684,7 +755,8 @@
     if (area !== 'local') return;
     for (const k in ch) cfg[k] = ch[k].newValue;
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
-    if ('freq' in ch && root) {
+    if (('freq' in ch || 'pos' in ch) && root) {
+      if ('pos' in ch) for (const b of [...live]) kill(b);   // 자리를 옮겼으니 비운다
       if (!plan().max) { clearTimeout(nextT); for (const b of [...live]) kill(b); }
       else schedule();
     }

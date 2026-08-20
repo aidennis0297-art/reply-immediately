@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "왈왈왈 — 도트 응원단",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "도트 강아지가 화면 옆에서 응원하고, 위험한 버튼을 알려주고, 질문에 답해줍니다.",
   "permissions": [
     "storage"
