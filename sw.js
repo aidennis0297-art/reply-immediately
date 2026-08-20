@@ -66,7 +66,10 @@ async function archiveAdd(host, lines) {
       .slice(0, keys.length - ARCH_SITES)
       .forEach((k) => delete archive[k]);
   }
-  await chrome.storage.local.set({ archive });
+  // 팝업이 통째로 다시 읽지 않도록 요약을 같이 써둔다
+  const stat = { sites: Object.keys(archive).length, lines: 0 };
+  for (const k in archive) stat.lines += archive[k].v.length;
+  await chrome.storage.local.set({ archive, archStat: stat });
 }
 
 async function archiveGet(host) {

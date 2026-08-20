@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <title>왈왈왈</title>
 <style>
-  @font-face { font-family: Galmuri11; src: url(fonts/Galmuri11.woff2) format('woff2'); }
+  @font-face { font-family: Galmuri11; src: url(fonts/Galmuri11.woff2) format('woff2');
+               font-display: swap; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --pink: #ff8fbb; --pink-d: #b0446e; --line: #e9bdd0;
@@ -117,6 +118,12 @@
   <div class="rangeBox">
     <input type="range" id="freqRange" min="0" max="10" step="1" value="3">
     <div class="rangeLabel" id="freqLabel">동시에 <b>3</b>개</div>
+  </div>
+
+  <div class="sec">말풍선 크기</div>
+  <div class="rangeBox">
+    <input type="range" id="sizeRange" min="60" max="140" step="10" value="100">
+    <div class="rangeLabel" id="sizeLabel">보통 <b>100%</b></div>
   </div>
 
   <div class="sec">화면 읽고 드립치기</div>

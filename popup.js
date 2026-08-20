@@ -1,5 +1,5 @@
 const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 3,
-                   follow: true, pos: 'both', apiKey: '', pets: 0 };
+                   follow: true, pos: 'both', size: 100, apiKey: '', pets: 0 };
 const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
 const PER_PET = 10, MAX_PET = 1000;
 const $ = (id) => document.getElementById(id);
@@ -35,6 +35,12 @@ function drawPosIcons(sel) {
   }
 }
 
+function showSize(n) {
+  $('sizeRange').value = n;
+  const name = n <= 80 ? '작게' : n >= 120 ? '크게' : '보통';
+  $('sizeLabel').innerHTML = `${name} <b>${n}%</b>`;
+}
+
 function showFreq(n) {
   $('freqRange').value = n;
   $('freqLabel').innerHTML = n === 0 ? '<b>안 띄움</b>' : `동시에 <b>${n}</b>개`;
@@ -43,6 +49,11 @@ function showFreq(n) {
 function paint(box, val) {
   for (const b of box.querySelectorAll('button[data-v]')) b.classList.toggle('on', b.dataset.v === val);
 }
+
+// 저장값이 오기 전에도 창이 비어 보이지 않게 기본 모습부터 그려둔다
+showPower(true);
+drawPosIcons('both');
+paint($('modes'), 'basic');
 
 function showBond(pets) {
   const n = Math.min(MAX_PET, pets);
@@ -62,7 +73,7 @@ function showKey(v) {
   el.className = ok ? 'hint ok' : 'hint';
 }
 
-chrome.storage.local.get(DEFAULTS, (c) => {
+chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   showPower(c.enabled);
   $('follow').checked = c.follow;
   $('ai').checked = c.ai;
@@ -71,8 +82,10 @@ chrome.storage.local.get(DEFAULTS, (c) => {
   paint($('poss'), c.pos);
   drawPosIcons(c.pos);
   showFreq(typeof c.freq === 'number' ? c.freq : (OLD_FREQ[c.freq] ?? 3));
+  showSize(c.size || 100);
   showBond(c.pets);
   showKey(c.apiKey);
+  showArchive(c.archStat);
 });
 
 for (const id of ['follow', 'ai']) {
@@ -100,17 +113,19 @@ $('freqRange').oninput = (e) => {
   save({ freq: n });
 };
 
+$('sizeRange').oninput = (e) => {
+  const n = +e.target.value;
+  showSize(n);
+  save({ size: n });
+};
+
 // ── 사이트별 멘트 보관함 ──
-function showArchive() {
-  chrome.storage.local.get({ archive: {} }, ({ archive }) => {
-    const sites = Object.keys(archive);
-    const n = sites.reduce((a, k) => a + (archive[k].v?.length || 0), 0);
-    $('archStat').textContent = n
-      ? `${sites.length}개 사이트 · ${n}줄 모았어요`
-      : '아직 모은 게 없어요';
-  });
+function showArchive(stat) {
+  const n = stat?.lines || 0;
+  $('archStat').textContent = n
+    ? `${stat.sites}개 사이트 · ${n}줄 모았어요`
+    : '아직 모은 게 없어요';
 }
-showArchive();
 
 $('expArch').onclick = () => {
   chrome.storage.local.get({ archive: {}, counts: {} }, (d) => {
@@ -131,12 +146,13 @@ $('expArch').onclick = () => {
 
 $('clrArch').onclick = () => {
   if (!confirm('모아둔 사이트별 멘트를 전부 지울까요?')) return;
-  chrome.storage.local.set({ archive: {} }, showArchive);
+  chrome.storage.local.set({ archive: {}, archStat: { sites: 0, lines: 0 } },
+    () => showArchive(null));
 };
 
 // 팝업이 열려 있는 동안 다른 탭에서 쓰다듬어도 게이지가 따라 오른다
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area !== 'local') return;
   if (ch.pets) showBond(ch.pets.newValue);
-  if (ch.archive) showArchive();
+  if (ch.archStat) showArchive(ch.archStat.newValue);
 });

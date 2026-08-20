@@ -8,7 +8,7 @@
 
   const SCALE = 3, DOG_W = D.W * SCALE, DOG_H = D.H * SCALE;
   const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 'normal',
-                     follow: true, pos: 'both' };
+                     follow: true, pos: 'both', size: 100 };
   const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
   const SS = 'cheerBuddy.bubbles';
   const TICK = 100, WALK_PX = 14, SLEEP_AFTER = 75000;
@@ -143,6 +143,8 @@
   let askOpen = false;
 
   const clampX = (x) => Math.max(4, Math.min(innerWidth - DOG_W - 4, x));
+  // 말풍선 크기 배율. 60~140% 사이로 설정에서 조절한다.
+  const zoom = () => Math.max(0.6, Math.min(1.4, (cfg.size || 100) / 100));
 
   // ---------- 지금 무슨 상황인지 ----------
   const COND = /^@([a-z]+)(>=|<=|>|<)?(\d+)?\|/;
@@ -214,7 +216,9 @@
     document.documentElement.appendChild(root);
 
     // 폰트는 확장 리소스에서. 페이지 CSP를 타지 않는다.
-    new FontFace('CBGalmuri', `url("${chrome.runtime.getURL('fonts/Galmuri11.woff2')}")`)
+    // swap: 폰트가 늦게 와도 기본 글꼴로 먼저 보여준다
+    new FontFace('CBGalmuri', `url("${chrome.runtime.getURL('fonts/Galmuri11.woff2')}")`,
+                 { display: 'swap' })
       .load().then((f) => document.fonts.add(f)).catch(() => {});
 
     dog.x = clampX(dog.x);
@@ -440,8 +444,8 @@
   // 좌·우 벽은 세로로, 위·아래 밴드는 가로로 흩어놓는다.
   function freeSlot(side, size) {
     const vert = side === 'left' || side === 'right';
-    const span = vert ? [innerHeight * 0.08, innerHeight * 0.82]
-                      : [10, Math.max(20, innerWidth - size - 10)];
+    const span = vert ? [innerHeight * 0.05, innerHeight * 0.86]
+                      : [6, Math.max(20, innerWidth - size - 6)];
     const taken = [...live].filter((b) => b.dataset.side === side).map((b) => {
       const v = parseInt(vert ? b.style.bottom : b.style.left, 10) || 0;
       return [v, v + (vert ? b.offsetHeight : b.offsetWidth)];
@@ -468,15 +472,16 @@
                  (opt.cls || KIND_CLS[kind] || pick(CANDY)), sh);
     b.textContent = text;
     b.dataset.side = side;
-    b.style.fontSize = (opt.size || Math.round(rnd(13, 18.9))) + 'px';
-    b.style.maxWidth = (opt.width || Math.round(rnd(170, 320))) + 'px';
+    const z = zoom();
+    b.style.fontSize = (opt.size || Math.round(rnd(13, 18.9) * z)) + 'px';
+    b.style.maxWidth = (opt.width || Math.round(rnd(170, 320) * z)) + 'px';
     if (opt.quiet) b.classList.add('quiet');
 
     // 좌·우는 벽에 붙여 세로로, 위·아래는 밴드 안에서 가로로 흩어놓는다.
     const vert = side === 'left' || side === 'right';
     const cross = opt.cross != null ? opt.cross
-      : Math.round(side === 'bottom' ? rnd(74, 200)
-        : side === 'top' ? rnd(14, 130) : rnd(12, 96));
+      : Math.round(side === 'bottom' ? rnd(66, 132)     // 개(54px)를 피할 만큼만
+        : side === 'top' ? rnd(6, 54) : rnd(4, 38));
     b.style[side] = cross + 'px';
     b.style[vert ? 'bottom' : 'left'] = '0px';
     const main = opt.main != null ? opt.main
@@ -512,6 +517,8 @@
   function showSay(text, kind) {
     say.textContent = text;
     say.className = 'bubble say ' + (KIND_CLS[kind] || 'k-tip');
+    say.style.fontSize = Math.round(15 * zoom()) + 'px';
+    say.style.maxWidth = Math.round(264 * zoom()) + 'px';
     say.hidden = false;
     placeSay();
     clearTimeout(sayT);
@@ -808,8 +815,9 @@
     if (area !== 'local') return;
     for (const k in ch) cfg[k] = ch[k].newValue;
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
-    if (('freq' in ch || 'pos' in ch) && root) {
-      if ('pos' in ch) for (const b of [...live]) kill(b);   // 자리를 옮겼으니 비운다
+    if (('freq' in ch || 'pos' in ch || 'size' in ch) && root) {
+      // 자리나 크기가 바뀌었으면 지금 떠 있는 건 비우고 새로 채운다
+      if ('pos' in ch || 'size' in ch) for (const b of [...live]) kill(b);
       if (!plan().max) { clearTimeout(nextT); for (const b of [...live]) kill(b); }
       else schedule();
     }
