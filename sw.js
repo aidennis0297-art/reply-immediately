@@ -118,40 +118,109 @@ async function fetchLines({ mode, ctx }) {
   return lines.length ? lines : shuffle(await archiveGet(ctx.host)).slice(0, 10);
 }
 
+// ── 오프라인/기본 똑똑한 강아지 답변 엔진 ──
+function getOfflineDogAnswer(q, ctx) {
+  const text = (q || '').toLowerCase().replace(/\s+/g, '');
+  const now = new Date();
+  const hours = now.getHours();
+  const mins = now.getMinutes();
+
+  if (/안녕|반가|하이|좋은아침|좋은밤|헬로|방가/.test(text)) {
+    return ['주인님 안녕! 멍멍!', '오늘도 꼬리 흔들며 기다리고 있었어!'];
+  }
+  if (/몇시|시간|지금몇|몇분|시각|몇시야/.test(text)) {
+    return [`지금은 ${hours}시 ${mins}분이다 멍!`, '집중하기 딱 좋은 시간이야!'];
+  }
+  if (/뭐해|뭐하고|심심|놀자|놀아|바빠/.test(text)) {
+    return ['주인님 화면 구경하고 있었어 멍!', '나랑 뽀모도로 한 세트 달릴래?'];
+  }
+  if (/힘들|지쳐|피곤|우울|슬퍼|죽겠|살려|졸려/.test(text)) {
+    return ['주인님 토닥토닥... 내가 곁에 있어 멍!', '잠깐 기지개 켜고 물 한 모금 마시자!'];
+  }
+  if (/칭찬|잘했|대단|최고|멋져|착해/.test(text)) {
+    return ['헤헤 꼬리 프로펠러 가동 중이다 멍!', '주인님이 세상에서 제일 멋져!'];
+  }
+  if (/배고|밥|간식|고기|치킨|피자|야식|맛있는/.test(text)) {
+    return ['나도 맛있는 뼈다귀 먹고 싶다 멍멍!', '주인님도 밥 잘 챙겨 먹고 힘내!'];
+  }
+  if (/뽀모|타이머|집중|공부|일|작업/.test(text)) {
+    return ['우측 하단 토마토 타이머를 눌러봐 멍!', '25분 동안 내가 딴짓도 감시해줄게!'];
+  }
+  if (/누구|이름|너는|정체|소개/.test(text)) {
+    return ['나는 브라우저 지킴이 골든리트리버 왈왈이야 멍!', '주인님을 응원하러 왔어!'];
+  }
+  if (/사랑|좋아|귀여|이뻐|예뻐|뽀뽀/.test(text)) {
+    return ['나도 주인님이 제일 좋아 멍멍! ❤️', '와락 안길래!'];
+  }
+  if (/고마|감사|수고|땡큐|고마워/.test(text)) {
+    return ['별말씀을요 멍! 언제든 불러줘!', '항상 주인님 편이야!'];
+  }
+  
+  if (ctx && ctx.site && ctx.site !== 'location.hostname') {
+    return [
+      `지금 ${ctx.site} 사이트를 보고 있구나 멍!`,
+      `"${q}" 에 대해 더 깊은 AI 답변을 원하면 팝업에서 API 키를 넣어줘 멍멍!`
+    ];
+  }
+  return [
+    `"${q}" 라고 물어봤구나 멍!`,
+    '더 깊은 AI 답변을 듣고 싶다면 팝업에 NVIDIA API 키를 넣어줘 멍멍!'
+  ];
+}
+
 // 개한테 직접 물었을 때. 쿨다운도 캐시도 걸지 않는다 — 사용자가 기다리고 있으니까.
 async function ask({ mode, q, ctx, history }) {
   const { apiKey } = await chrome.storage.local.get({ apiKey: '' });
-  if (!apiKey) return { text: '나 아직 귀만 있고 머리가 없어... 팝업에서 API 키 넣어줘 멍멍!' };
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: self.CB_ASK[mode] || self.CB_ASK.basic },
-        // 앞선 대화를 그대로 넣어 맥락을 잇는다. 새 대화를 고르면 비어서 온다.
-        ...(Array.isArray(history) ? history : []).flatMap((h) => [
-          { role: 'user', content: h.q },
-          { role: 'assistant', content: h.a },
-        ]),
-        { role: 'user', content: `${userMsg(ctx)}\n\n[사용자 질문] ${q}` },
-      ],
-      temperature: 0.9,
-      top_p: 0.95,
-      max_tokens: 220,
-      chat_template_kwargs: { enable_thinking: false },
-    }),
-  });
-  if (!r.ok) throw new Error('NIM ' + r.status);
-  const j = await r.json();
-  // 줄 단위로 쪼갠다. 한 줄이 말풍선 하나가 된다.
-  const parts = String(j.choices?.[0]?.message?.content || '')
-    .split(/\n+/)
-    .map((t) => t.replace(/^\s*[-*\d.)\]\[\s]+/, '').replace(/^["'`]+|["'`]+$/g, '').trim())
-    .filter((t) => t)
-    .map((t) => t.slice(0, 90))
-    .slice(0, 3);
-  return { parts, text: parts[0] || '음... 냄새 맡아봐도 잘 모르겠어 멍!' };
+  if (!apiKey) {
+    const parts = getOfflineDogAnswer(q, ctx);
+    return { parts, text: parts[0] };
+  }
+
+  const models = [
+    'nvidia/llama-3.1-nemotron-70b-instruct',
+    'meta/llama-3.1-70b-instruct',
+    'meta/llama-3.1-8b-instruct',
+    'nvidia/nemotron-3.5-lightning-30b-a3b',
+  ];
+
+  for (const modelName of models) {
+    try {
+      const r = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [
+            { role: 'system', content: self.CB_ASK[mode] || self.CB_ASK.basic },
+            ...(Array.isArray(history) ? history : []).flatMap((h) => [
+              { role: 'user', content: h.q },
+              { role: 'assistant', content: h.a },
+            ]),
+            { role: 'user', content: `${userMsg(ctx)}\n\n[사용자 질문] ${q}` },
+          ],
+          temperature: 0.85,
+          top_p: 0.95,
+          max_tokens: 220,
+          chat_template_kwargs: { enable_thinking: false },
+        }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const parts = String(j.choices?.[0]?.message?.content || '')
+          .split(/\n+/)
+          .map((t) => t.replace(/^\s*[-*\d.)\]\[\s]+/, '').replace(/^["'`]+|["'`]+$/g, '').trim())
+          .filter((t) => t)
+          .map((t) => t.slice(0, 90))
+          .slice(0, 3);
+        if (parts.length) return { parts, text: parts[0] };
+      }
+    } catch (_) {
+      // try next model
+    }
+  }
+
+  const parts = getOfflineDogAnswer(q, ctx);
+  return { parts, text: parts[0] };
 }
 
 async function pet() {

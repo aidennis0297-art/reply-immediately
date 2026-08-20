@@ -745,6 +745,7 @@
   // ---------- 개 말풍선 ----------
   function showSay(text, kind, opt = {}) {
     if (!dogOn()) return;
+    say.classList.remove('out');
     say.innerHTML = '';
     const personaKey = opt.persona || (kind === 'pomo' ? 'pomo' : activeMode());
     const pInfo = PERSONA_INFO[personaKey] || PERSONA_INFO.basic;
@@ -766,6 +767,7 @@
     say.style.maxWidth = Math.round(264 * zoom()) + 'px';
     say.hidden = false;
     place(say);
+    requestAnimationFrame(() => place(say));
     clearTimeout(sayT);
     sayT = setTimeout(hideSay, Math.min(11000, 2600 + text.length * 120) * rnd(0.9, 1.2));
     idleSince = Date.now();
@@ -1509,17 +1511,13 @@
   function syncOnVisible() {
     if (document.hidden) return;
     idleSince = Date.now();
-    if (pomo.running && pomo.endTime > 0) {
-      pomo.remaining = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
-      updatePomoUI();
-    }
+    updatePomoUI();
     try {
-      chrome.storage.local.get(['pomoMode', 'pomoRunning', 'pomoEndTime', 'pomoRemaining', 'pomoSets', 'pomoHalfNotified', 'dogPos'], (v) => {
+      chrome.storage.local.get({ pomo: null, dogPos: null }, (v) => {
         if (!v) return;
-        loadPomoState(v);
-        if (v.dogPos && typeof v.dogPos.x === 'number' && Math.abs(v.dogPos.x - dog.x) > 60) {
-          dog.x = clampX(v.dogPos.x);
-          dog.dir = v.dogPos.dir === -1 ? -1 : 1;
+        if (v.pomo) loadPomoState(v);
+        if (v.dogPos && !document.hasFocus()) {
+          loadDogPos(v.dogPos);
           render();
         }
       });
@@ -1532,7 +1530,6 @@
   const onUnload = () => {
     flushCounts();
     saveDogPos();
-    savePomoState();
   };
   addEventListener('pagehide', onUnload);
   addEventListener('beforeunload', onUnload);
@@ -1552,48 +1549,26 @@
     }
   }).observe(document.documentElement, { childList: true });
 
-  // ── 동기 즉시 초기화 (세션 캐시를 이용해 페이지 이동 시 깜빡임/지연 0ms 제거) ──
-  try {
-    const sCfg = JSON.parse(sessionStorage.getItem('cheerBuddy.cfg') || 'null');
-    if (sCfg) cfg = { ...DEFAULTS, ...sCfg };
-    const sPomo = JSON.parse(sessionStorage.getItem('cheerBuddy.pomo') || 'null');
-    if (sPomo) loadPomoState(sPomo);
-    const sPos = JSON.parse(sessionStorage.getItem('cheerBuddy.dogPos') || 'null');
-    if (sPos) cfg.dogPos = sPos;
-  } catch (_) {}
-
-  // 초기 즉시 시작 (저장소 콜백 기다리지 않고 즉시 표시)
-  if (cfg.enabled) {
-    start();
-  }
-
-  // 이후 로컬 저장소와 비동기 정밀 동기화
-  chrome.storage.local.get({ ...DEFAULTS, counts: {} }, (v) => {
+  // ── 초기 시작 (크롬 전역 저장소에서 로드) ──
+  chrome.storage.local.get({ ...DEFAULTS, pomo: null, dogPos: null, counts: {} }, (v) => {
     cfg = { ...DEFAULTS, ...v };
-    try { sessionStorage.setItem('cheerBuddy.cfg', JSON.stringify(cfg)); } catch (_) {}
     counts = v.counts || {};
     const used = Object.values(counts);
     seq = used.length ? Math.max(...used) : 0;
-    loadPomoState(v);
+    if (v.pomo) loadPomoState(v);
+    if (v.dogPos) cfg.dogPos = v.dogPos;
     if (cfg.enabled) {
-      if (!root) start();
-      else {
-        applyDog();
-        applyPomoVisibility();
-      }
-    } else if (root) {
-      unmount();
+      start();
     }
   });
 
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local') return;
     for (const k in ch) if (k !== 'counts' && k !== 'dogPos' && k !== 'pomo') cfg[k] = ch[k].newValue;
-    try { sessionStorage.setItem('cheerBuddy.cfg', JSON.stringify(cfg)); } catch (_) {}
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
     if ('dog' in ch) applyDog();
     if ('pomoOn' in ch) applyPomoVisibility();
-    if ('pomo' in ch) {
+    if ('pomo' in ch && ch.pomo.newValue) {
       loadPomoState(ch.pomo.newValue);
     }
     if ('dogPos' in ch && !document.hasFocus() && ch.dogPos.newValue) {
