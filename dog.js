@@ -183,12 +183,42 @@
     posBottom: [
       'ooooooooo', 'o.......o', 'o.......o', 'opppppppo', 'opppppppo', 'ooooooooo',
     ],
+    tomato: [
+      '...gg...',
+      '..gggg..',
+      '.oorroo.',
+      'orrrrrro',
+      'orrrrrro',
+      'orrrrrro',
+      '.oorroo.',
+    ],
+    sound: [
+      '..o.....',
+      '.oo.o.o.',
+      'oooo..o.',
+      'oooo.o.o',
+      'oooo..o.',
+      '.oo.o.o.',
+      '..o.....',
+    ],
+    mute: [
+      '..o.....',
+      '.oo..o..',
+      'oooo..o.',
+      'oooo.o.o',
+      'oooo..o.',
+      '.oo.o..o',
+      '..o.....',
+    ],
   };
 
-  // '-' 감은 눈, 'O' 감은 눈(가로줄), 'p' 하트 분홍
+  // '-' 감은 눈, 'O' 감은 눈(가로줄), 'p' 하트 분홍, 'r' 토마토 빨강, 'g' 초록잎, 'y' 노랑
   PAL['-'] = '#7a4a22';      // 감은 눈
   PAL['O'] = '#fff6fb';      // 마이크 몸통
   PAL['p'] = '#ff6f9c';      // 하트
+  PAL['r'] = '#ff4757';      // 토마토 빨강
+  PAL['g'] = '#2ed573';      // 토마토 줄기/잎
+  PAL['y'] = '#ffa502';      // 노랑
 
   const pad = (rows) => {
     const out = [];

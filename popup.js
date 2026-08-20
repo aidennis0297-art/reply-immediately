@@ -1,10 +1,31 @@
 const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 3,
                    follow: true, pos: 'both', size: 100, edge: 16,
-                   dog: true, keepChat: true, apiKey: '', pets: 0 };
+                   dog: true, keepChat: true, apiKey: '', pets: 0,
+                   pomoOn: true, pomoSound: true };
 const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
 const PER_PET = 10, MAX_PET = 1000;
 const $ = (id) => document.getElementById(id);
 const save = (o) => chrome.storage.local.set(o);
+
+function playPop8Bit() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(540, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.035);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.04);
+  } catch (_) {}
+}
 
 // 슬라이더는 드래그하는 동안 계속 값이 바뀐다.
 // 매번 저장하면 크롬의 분당 쓰기 한도에 걸려 마지막 값이 씹히므로 잠깐 모아서 쓴다.
@@ -34,6 +55,7 @@ function showPower(on) {
   CB_DOG.drawIcon(powerCv, 'power', 3, on ? '#b0446e' : '#c9b3be');
 }
 $('power').onclick = () => {
+  playPop8Bit();
   const on = !$('power').classList.contains('on');
   showPower(on);
   save({ enabled: on });
@@ -98,6 +120,8 @@ chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   $('dog').checked = c.dog !== false;
   $('follow').checked = c.follow;
   $('keepChat').checked = c.keepChat !== false;
+  $('pomoOn').checked = c.pomoOn !== false;
+  $('pomoSound').checked = c.pomoSound !== false;
   $('ai').checked = c.ai;
   $('apiKey').value = c.apiKey;
   paint($('modes'), c.mode);
@@ -111,8 +135,11 @@ chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   showArchive(c.archStat);
 });
 
-for (const id of ['dog', 'follow', 'keepChat', 'ai']) {
-  $(id).onchange = (e) => save({ [id]: e.target.checked });
+for (const id of ['dog', 'follow', 'keepChat', 'pomoOn', 'pomoSound', 'ai']) {
+  $(id).onchange = (e) => {
+    playPop8Bit();
+    save({ [id]: e.target.checked });
+  };
 }
 $('apiKey').onchange = (e) => {
   const v = e.target.value.trim();
@@ -124,6 +151,7 @@ for (const [box, key] of [[$('modes'), 'mode'], [$('poss'), 'pos']]) {
   box.onclick = (e) => {
     const b = e.target.closest('button[data-v]');
     if (!b) return;
+    playPop8Bit();
     paint(box, b.dataset.v);
     if (key === 'pos') drawPosIcons(b.dataset.v);
     save({ [key]: b.dataset.v });

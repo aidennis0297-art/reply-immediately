@@ -39,6 +39,15 @@ assert.equal(parseLines(Array.from({ length: 20 }, (_, i) => `${i + 1}. 줄`).jo
 require(path.join(dir, 'lines.js'));
 const L = globalThis.CB_LINES;
 assert.equal(L.bond.length, 100, '애정도 멘트는 정확히 100개');
+assert.ok(L.pomodoro, '뽀모도로 대사 풀이 없다');
+const POMO_PHASES = ['focus_start', 'focus_half', 'focus_done', 'break_start', 'break_done'];
+for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
+  assert.ok(L.pomodoro[k], '뽀모도로 ' + k + ' 페르소나가 없다');
+  for (const ph of POMO_PHASES) {
+    assert.ok(Array.isArray(L.pomodoro[k][ph]) && L.pomodoro[k][ph].length >= 3,
+      '뽀모도로 ' + k + ' ' + ph + ' 대사 부족');
+  }
+}
 const FLAGS = ['tabs', 'scroll', 'stay', 'idle', 'long', 'video', 'forms'];
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
   assert.ok(L[k].length >= 500, k + ' 풀이 500개 미만: ' + L[k].length);
@@ -80,6 +89,8 @@ for (const [st, frames] of Object.entries(D.FRAMES)) {
   }
 }
 assert.ok(D.SPEED.walk < D.SPEED.sleep, '걷기가 자기보다 빨라야 함');
+assert.ok(D.ICONS.tomato, '토마토 아이콘 없음');
+assert.ok(D.ICONS.sound, '사운드 아이콘 없음');
 
 // ---- 확장 패키징 규칙 ----
 // 크롬은 '_' 로 시작하는 파일·폴더 이름을 시스템 예약으로 보고 확장 로드를 거부한다.

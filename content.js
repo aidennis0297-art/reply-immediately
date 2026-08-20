@@ -12,6 +12,7 @@
     enabled: true, mode: 'basic', ai: true, freq: 3, follow: true,
     pos: 'both', size: 100, edge: 16, dog: true, keepChat: true, barW: 340,
     dogPos: null,
+    pomoOn: true, pomoSound: true, pomoFocusMin: 25, pomoBreakMin: 5, pomoLongBreakMin: 15,
   };
   const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
   const CHAT_KEY = 'cheerBuddy.chat';
@@ -122,11 +123,22 @@
   .c1{--bg:#ffd9ea;--ink:#b0446e}.c2{--bg:#d3f5e5;--ink:#2b8a66}.c3{--bg:#fff2c2;--ink:#a8791f}
   .c4{--bg:#e4dcff;--ink:#6a51c2}.c5{--bg:#d5ecff;--ink:#356ea8}.c6{--bg:#ffe4d2;--ink:#c26a2f}
   .c7{--bg:#e6f7c7;--ink:#5d8a24}
-  /* 말투마다 고유한 색. '모두' 모드에서 누가 말했는지 색으로 안다 */
-  .p-commu{--bg:#dde5f7;--ink:#1f3d78}
-  .p-sunbi{--bg:#f0e3d1;--ink:#5c3a1e}
-  .p-tsun{--bg:#ffe6f0;--ink:#c2367a;
-          background-image:url(${heartPattern});background-repeat:repeat}
+
+  /* ── 페르소나별 고유 스타일 & 뱃지 ── */
+  .p-badge{display:inline-block;padding:1px 5px;margin-right:5px;border:1.5px solid currentColor;
+           border-radius:6px;font-size:10px;line-height:1.2;font-weight:700;vertical-align:1px;opacity:.9}
+  .p-basic{--bg:#fffbf0;--ink:#7c4d12;border-color:#e5a73b;
+           box-shadow:0 4px 0 rgba(160,100,20,.12),inset 0 3px 0 rgba(255,255,255,.85)}
+  .p-commu{--bg:#edf3fc;--ink:#1b3874;border-color:#456db5;
+           box-shadow:0 4px 0 rgba(25,60,130,.12),inset 0 3px 0 rgba(255,255,255,.85)}
+  .p-sunbi{--bg:#f6eee4;--ink:#523418;border-color:#8c5d36;
+           box-shadow:0 4px 0 rgba(90,55,25,.12),inset 0 3px 0 rgba(255,255,255,.85)}
+  .p-tsun{--bg:#fff0f6;--ink:#b82b6c;border-color:#f06292;
+          background-image:url(${heartPattern});background-repeat:repeat;
+          box-shadow:0 4px 0 rgba(190,40,110,.12),inset 0 3px 0 rgba(255,255,255,.85)}
+  .p-pomo{--bg:#fff2f0;--ink:#cf1322;border-color:#ff4d4f;
+          box-shadow:0 4px 0 rgba(220,30,40,.15),inset 0 3px 0 rgba(255,255,255,.85)}
+
   .k-warn{--bg:#ffe2e2;--ink:#c0392b;border-style:dashed}
   .k-tip{--bg:#d9f7e6;--ink:#20805a}
   .k-info{--bg:#e2edff;--ink:#3a68b0}
@@ -134,12 +146,165 @@
             inset 0 3px 0 rgba(255,255,255,.6),0 0 0 3px rgba(140,110,255,.22)}
   .k-bond{--bg:#ffd0e6;--ink:#c2367a;box-shadow:0 4px 0 rgba(0,0,0,.1),
           inset 0 3px 0 rgba(255,255,255,.6),0 0 0 4px rgba(255,140,190,.28)}
+
+  /* ── 뽀모도로 타이머 UI ── */
+  .pomo-widget{position:fixed;bottom:12px;right:18px;pointer-events:auto;z-index:2147483640;
+               font-family:'CBGalmuri','Galmuri11',monospace;user-select:none;
+               transition:transform .2s ease,opacity .2s ease}
+  .pomo-pill{display:flex;align-items:center;gap:6px;padding:6px 12px;
+             border:2.5px solid #d4380d;border-radius:20px;background:#fff2e8;color:#d4380d;
+             cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.15),inset 0 2px 0 rgba(255,255,255,.8);
+             font-size:13px;font-weight:700}
+  .pomo-pill:hover{background:#ffe7ba;transform:translateY(-1px)}
+  .pomo-pill canvas{image-rendering:pixelated;flex:none}
+  .pomo-pill.running{animation:pomoPulse 2s ease-in-out infinite}
+  @keyframes pomoPulse{0%,100%{box-shadow:0 3px 0 rgba(0,0,0,.15),0 0 0 0 rgba(255,77,79,.4)}
+                       50%{box-shadow:0 3px 0 rgba(0,0,0,.15),0 0 0 6px rgba(255,77,79,0)}}
+
+  .pomo-hud{position:absolute;bottom:0;right:0;width:240px;padding:12px;
+            border:3px solid #d4380d;border-radius:14px;background:#fff7f0;color:#5a1e06;
+            box-shadow:0 6px 0 rgba(0,0,0,.18),inset 0 3px 0 rgba(255,255,255,.9);
+            animation:pop .28s cubic-bezier(.2,1.6,.4,1) both}
+  .pomo-hud .hud-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;
+                      font-size:12px;font-weight:700;color:#d4380d}
+  .pomo-hud .hud-icons{display:flex;gap:5px;align-items:center}
+  .pomo-hud .icon-btn{cursor:pointer;padding:2px 5px;border:1.5px solid #d4380d;border-radius:6px;
+                      background:#fff;color:#d4380d;font-size:11px;line-height:1}
+  .pomo-hud .icon-btn:hover{background:#ffd591}
+  .pomo-hud .hud-clock{text-align:center;font-size:32px;font-weight:700;line-height:1.1;
+                       color:#cf1322;letter-spacing:1px;margin:6px 0 4px;font-variant-numeric:tabular-nums}
+  .pomo-hud .hud-status{text-align:center;font-size:11px;color:#873800;margin-bottom:8px}
+  .pomo-hud .hud-bar{height:8px;border:1.5px solid #d4380d;border-radius:5px;background:#ffe7ba;
+                     overflow:hidden;margin-bottom:10px}
+  .pomo-hud .hud-prog{height:100%;background:repeating-linear-gradient(90deg,#ff4d4f 0 4px,#ff7875 4px 8px);
+                      width:0%;transition:width .3s ease}
+  .pomo-hud .hud-modes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px}
+  .pomo-hud .hud-modes button{padding:4px 0;font:inherit;font-size:11px;border:1.5px solid #d4380d;
+                              border-radius:6px;background:#fff;color:#873800;cursor:pointer}
+  .pomo-hud .hud-modes button.on{background:#ffd591;border-color:#ad2102;font-weight:700;color:#5a1e06}
+  .pomo-hud .hud-acts{display:flex;gap:5px}
+  .pomo-hud .hud-acts button{flex:1;padding:6px 0;font:inherit;font-size:12px;font-weight:700;
+                             border:2px solid #d4380d;border-radius:8px;cursor:pointer}
+  .pomo-hud .btn-main{background:#ffd591;color:#5a1e06}
+  .pomo-hud .btn-main:hover{background:#ffc069}
+  .pomo-hud .btn-sub{background:#fff;color:#873800}
+  .pomo-hud .btn-sub:hover{background:#fff2e8}
+  .pomo-hud .hud-sets{text-align:center;font-size:11px;color:#ad2102;margin-top:8px}
+
   [hidden]{display:none!important}`;
 
   const CANDY = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'];
   const KIND_CLS = { warn: 'k-warn', tip: 'k-tip', info: 'k-info',
-                     bond: 'k-bond', answer: 'k-answer' };
-  const PERSONA_CLS = { commu: 'p-commu', tsun: 'p-tsun', sunbi: 'p-sunbi' };
+                     bond: 'k-bond', answer: 'k-answer', pomo: 'p-pomo' };
+  const PERSONA_INFO = {
+    basic: { name: '골든', cls: 'p-basic' },
+    commu: { name: '커뮤', cls: 'p-commu' },
+    tsun:  { name: '츤데레', cls: 'p-tsun' },
+    sunbi: { name: '선비', cls: 'p-sunbi' },
+    pomo:  { name: '뽀모', cls: 'p-pomo' },
+  };
+  const PERSONA_CLS = {
+    basic: 'p-basic',
+    commu: 'p-commu',
+    tsun: 'p-tsun',
+    sunbi: 'p-sunbi',
+    pomo: 'p-pomo',
+  };
+
+  // ── 8비트 사운드 신시사이저 (Web Audio API) ──
+  const SFX_CTX = () => {
+    if (!window._cbAudio) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) window._cbAudio = new AC();
+    }
+    if (window._cbAudio && window._cbAudio.state === 'suspended') {
+      window._cbAudio.resume();
+    }
+    return window._cbAudio;
+  };
+
+  function play8Bit(type = 'click') {
+    if (cfg.pomoSound === false) return;
+    try {
+      const ctx = SFX_CTX();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'click') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(540, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.035);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+        osc.start(now);
+        osc.stop(now + 0.04);
+      } else if (type === 'start') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.06);
+        osc.frequency.setValueAtTime(783.99, now + 0.12);
+        gain.gain.setValueAtTime(0.09, now);
+        gain.gain.setValueAtTime(0.09, now + 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.start(now);
+        osc.stop(now + 0.23);
+      } else if (type === 'pause') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.exponentialRampToValueAtTime(329.63, now + 0.08);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.09);
+      } else if (type === 'half') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.setValueAtTime(1174.66, now + 0.06);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.16);
+      } else if (type === 'done') {
+        const freqs = [523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((f, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = i === 3 ? 'triangle' : 'square';
+          o.frequency.setValueAtTime(f, now + i * 0.07);
+          g.gain.setValueAtTime(0.09, now + i * 0.07);
+          g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + (i === 3 ? 0.35 : 0.1));
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.start(now + i * 0.07);
+          o.stop(now + i * 0.07 + (i === 3 ? 0.36 : 0.11));
+        });
+      } else if (type === 'break_done') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(783.99, now);
+        osc.frequency.setValueAtTime(1046.50, now + 0.07);
+        gain.gain.setValueAtTime(0.09, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.start(now);
+        osc.stop(now + 0.23);
+      }
+    } catch (_) {}
+  }
+
+  // ── 뽀모도로 상태 ──
+  let pomo = {
+    mode: 'focus',        // 'focus' | 'break' | 'longBreak'
+    running: false,
+    endTime: 0,
+    remaining: 25 * 60,
+    sets: 0,
+    halfNotified: false,
+    hudOpen: false,
+  };
+  let pomoEl, pomoPill, pomoHud, pomoClockEl, pomoProgEl, pomoStatusEl, pomoSetsEl, pomoBtnMain;
 
   let cfg = { ...DEFAULTS };
   let root, sh, cv, ctx, say, zzz, askEl, askInput, micEl, footEl, chatEl;
@@ -228,6 +393,7 @@
     ctx = cv.getContext('2d');
     cv.addEventListener('click', poke);
     buildAsk();
+    buildPomo();
     document.documentElement.appendChild(root);
 
     new FontFace('CBGalmuri', `url("${chrome.runtime.getURL('fonts/Galmuri11.woff2')}")`,
@@ -237,6 +403,7 @@
     loadDogPos();
     dog.x = clampX(dog.x);
     applyDog();
+    applyPomoVisibility();
     render();
   }
 
@@ -301,6 +468,7 @@
     if (now - flagT > 2000) { flagT = now; readFlags(); }
 
     follow(now);
+    checkPomoTick();
 
     if (dog.state === 'walk') {
       const dx = dog.target - dog.x;
@@ -505,9 +673,16 @@
 
   function spawn(text, kind, opt = {}) {
     const side = opt.side || nextPlace();
-    const cls = KIND_CLS[kind] || PERSONA_CLS[opt.persona] || pick(CANDY);
+    const personaKey = opt.persona || activeMode();
+    const pInfo = PERSONA_INFO[personaKey] || PERSONA_INFO.basic;
+    const cls = KIND_CLS[kind] || PERSONA_CLS[personaKey] || pInfo.cls || pick(CANDY);
     const b = el('div', 'bubble side ' + side + ' ' + cls, sh);
-    b.textContent = text;
+
+    // 뱃지 태그로 페르소나 출처를 시각적으로 즉각 분류
+    const badge = el('span', 'p-badge', b);
+    badge.textContent = kind === 'warn' ? '주의' : kind === 'tip' ? '팁' : kind === 'info' ? '정보' : pInfo.name;
+    b.appendChild(document.createTextNode(text));
+
     b.dataset.side = side;
     const z = zoom();
     b.style.fontSize = Math.round(rnd(13, 18.9) * z) + 'px';
@@ -598,6 +773,292 @@
     }
   }
 
+  // ── 뽀모도로 타이머 UI 및 제어 ──
+  function buildPomo() {
+    pomoEl = el('div', 'pomo-widget', sh);
+
+    // 1) Compact Pill
+    pomoPill = el('div', 'pomo-pill', pomoEl);
+    const pillCv = el('canvas', null, pomoPill);
+    pillCv.width = 16; pillCv.height = 14;
+    D.drawIcon(pillCv.getContext('2d'), 'tomato', 2, '#d4380d');
+    const pillText = el('span', 'pomo-pill-text', pomoPill);
+    pillText.textContent = '25:00 ▶';
+
+    pomoPill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      play8Bit('click');
+      togglePomoHud();
+    });
+
+    // 2) Expanded HUD
+    pomoHud = el('div', 'pomo-hud', pomoEl);
+    pomoHud.hidden = true;
+
+    const head = el('div', 'hud-head', pomoHud);
+    const headTitle = el('span', null, head);
+    headTitle.textContent = '🍅 뽀모도로 타이머';
+
+    const icons = el('div', 'hud-icons', head);
+    const soundBtn = el('span', 'icon-btn', icons);
+    soundBtn.textContent = cfg.pomoSound !== false ? '🔊' : '🔇';
+    soundBtn.title = '8비트 효과음 켜기/끄기';
+    soundBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cfg.pomoSound = !cfg.pomoSound;
+      saveCfg({ pomoSound: cfg.pomoSound });
+      soundBtn.textContent = cfg.pomoSound ? '🔊' : '🔇';
+      play8Bit('click');
+    });
+
+    const closeBtn = el('span', 'icon-btn', icons);
+    closeBtn.textContent = '✕';
+    closeBtn.title = '접기';
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      play8Bit('click');
+      closePomoHud();
+    });
+
+    pomoClockEl = el('div', 'hud-clock', pomoHud);
+    pomoClockEl.textContent = '25:00';
+
+    pomoStatusEl = el('div', 'hud-status', pomoHud);
+    pomoStatusEl.textContent = '집중할 준비 되셨나요?';
+
+    const barWrap = el('div', 'hud-bar', pomoHud);
+    pomoProgEl = el('div', 'hud-prog', barWrap);
+
+    const modes = el('div', 'hud-modes', pomoHud);
+    const mFocus = el('button', 'on', modes); mFocus.textContent = '집중 25m';
+    const mBreak = el('button', '', modes); mBreak.textContent = '휴식 5m';
+    const mLong = el('button', '', modes); mLong.textContent = '긴휴식 15m';
+
+    mFocus.addEventListener('click', () => { play8Bit('click'); setPomoMode('focus'); });
+    mBreak.addEventListener('click', () => { play8Bit('click'); setPomoMode('break'); });
+    mLong.addEventListener('click', () => { play8Bit('click'); setPomoMode('longBreak'); });
+
+    const acts = el('div', 'hud-acts', pomoHud);
+    pomoBtnMain = el('button', 'btn-main', acts);
+    pomoBtnMain.textContent = '▶ 시작';
+    pomoBtnMain.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePomoRunning();
+    });
+
+    const btnReset = el('button', 'btn-sub', acts);
+    btnReset.textContent = '⏹ 리셋';
+    btnReset.addEventListener('click', (e) => {
+      e.stopPropagation();
+      play8Bit('click');
+      resetPomo();
+    });
+
+    const btnSkip = el('button', 'btn-sub', acts);
+    btnSkip.textContent = '⏭ 다음';
+    btnSkip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      play8Bit('click');
+      skipPomo();
+    });
+
+    pomoSetsEl = el('div', 'hud-sets', pomoHud);
+    pomoSetsEl.textContent = '오늘 달성: 🍅 0세트';
+
+    applyPomoVisibility();
+    updatePomoUI();
+  }
+
+  function pomoDuration(mode) {
+    if (mode === 'break') return (cfg.pomoBreakMin || 5) * 60;
+    if (mode === 'longBreak') return (cfg.pomoLongBreakMin || 15) * 60;
+    return (cfg.pomoFocusMin || 25) * 60;
+  }
+
+  function setPomoMode(mode) {
+    pomo.mode = mode;
+    pomo.running = false;
+    pomo.remaining = pomoDuration(mode);
+    pomo.endTime = 0;
+    pomo.halfNotified = false;
+    savePomoState();
+    updatePomoUI();
+  }
+
+  function togglePomoRunning() {
+    if (pomo.running) {
+      pomo.running = false;
+      pomo.remaining = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
+      pomo.endTime = 0;
+      play8Bit('pause');
+    } else {
+      pomo.running = true;
+      pomo.endTime = Date.now() + pomo.remaining * 1000;
+      play8Bit('start');
+      if (pomo.mode === 'focus') sayPomo('focus_start');
+      else sayPomo('break_start');
+    }
+    savePomoState();
+    updatePomoUI();
+  }
+
+  function resetPomo() {
+    pomo.running = false;
+    pomo.remaining = pomoDuration(pomo.mode);
+    pomo.endTime = 0;
+    pomo.halfNotified = false;
+    savePomoState();
+    updatePomoUI();
+  }
+
+  function skipPomo() {
+    if (pomo.mode === 'focus') {
+      pomo.sets++;
+      pomo.mode = (pomo.sets % 4 === 0) ? 'longBreak' : 'break';
+    } else {
+      pomo.mode = 'focus';
+    }
+    pomo.running = false;
+    pomo.remaining = pomoDuration(pomo.mode);
+    pomo.endTime = 0;
+    pomo.halfNotified = false;
+    savePomoState();
+    updatePomoUI();
+  }
+
+  function sayPomo(phase) {
+    const mode = activeMode();
+    const list = LINES.pomodoro?.[mode]?.[phase] || LINES.pomodoro?.basic?.[phase] || [];
+    if (!list.length) return;
+    const text = pick(list);
+    showSay(text, 'pomo');
+  }
+
+  function checkPomoTick() {
+    if (!pomo.running) return;
+    const now = Date.now();
+    const rem = Math.max(0, Math.round((pomo.endTime - now) / 1000));
+    pomo.remaining = rem;
+
+    const total = pomoDuration(pomo.mode);
+    if (!pomo.halfNotified && pomo.mode === 'focus' && rem <= Math.round(total / 2) && rem > 0) {
+      pomo.halfNotified = true;
+      play8Bit('half');
+      sayPomo('focus_half');
+      savePomoState();
+    }
+
+    if (rem <= 0) {
+      pomo.running = false;
+      pomo.endTime = 0;
+      pomo.halfNotified = false;
+      if (pomo.mode === 'focus') {
+        pomo.sets++;
+        play8Bit('done');
+        sayPomo('focus_done');
+        popHearts(4);
+        pomo.mode = (pomo.sets % 4 === 0) ? 'longBreak' : 'break';
+      } else {
+        play8Bit('break_done');
+        sayPomo('break_done');
+        pomo.mode = 'focus';
+      }
+      pomo.remaining = pomoDuration(pomo.mode);
+      savePomoState();
+    }
+    updatePomoUI();
+  }
+
+  function updatePomoUI() {
+    if (!pomoEl) return;
+    const min = Math.floor(pomo.remaining / 60);
+    const sec = pomo.remaining % 60;
+    const timeStr = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    const modeLabel = pomo.mode === 'focus' ? '집중' : pomo.mode === 'break' ? '휴식' : '긴 휴식';
+
+    const pillText = pomoPill?.querySelector('.pomo-pill-text');
+    if (pillText) {
+      pillText.textContent = `${pomo.mode === 'focus' ? '🍅' : '☕'} ${timeStr} ${pomo.running ? '⏸' : '▶'}`;
+    }
+    pomoPill?.classList.toggle('running', pomo.running);
+
+    if (pomoClockEl) pomoClockEl.textContent = timeStr;
+    if (pomoStatusEl) {
+      pomoStatusEl.textContent = pomo.running
+        ? `${modeLabel} 진행 중!`
+        : `${modeLabel} 준비 중 (${pomoDuration(pomo.mode) / 60}분)`;
+    }
+    if (pomoProgEl) {
+      const total = pomoDuration(pomo.mode);
+      const prog = Math.min(100, Math.max(0, Math.round(((total - pomo.remaining) / total) * 100)));
+      pomoProgEl.style.width = prog + '%';
+    }
+    if (pomoHud) {
+      const buttons = pomoHud.querySelectorAll('.hud-modes button');
+      if (buttons.length === 3) {
+        buttons[0].classList.toggle('on', pomo.mode === 'focus');
+        buttons[1].classList.toggle('on', pomo.mode === 'break');
+        buttons[2].classList.toggle('on', pomo.mode === 'longBreak');
+      }
+    }
+    if (pomoBtnMain) {
+      pomoBtnMain.textContent = pomo.running ? '⏸ 일시정지' : '▶ 시작';
+      pomoBtnMain.className = pomo.running ? 'btn-sub' : 'btn-main';
+    }
+    if (pomoSetsEl) {
+      const count = pomo.sets;
+      const icons = '🍅 '.repeat(count % 4) + '⚪ '.repeat(4 - (count % 4));
+      pomoSetsEl.textContent = `오늘 달성: ${icons.trim()} (${count}세트)`;
+    }
+  }
+
+  function togglePomoHud() {
+    if (!pomoHud) return;
+    pomoHud.hidden = !pomoHud.hidden;
+    pomo.hudOpen = !pomoHud.hidden;
+    updatePomoUI();
+  }
+
+  function closePomoHud() {
+    if (!pomoHud) return;
+    pomoHud.hidden = true;
+    pomo.hudOpen = false;
+  }
+
+  function applyPomoVisibility() {
+    if (!pomoEl) return;
+    pomoEl.hidden = cfg.pomoOn === false;
+  }
+
+  function savePomoState() {
+    const s = {
+      pomoMode: pomo.mode,
+      pomoRunning: pomo.running,
+      pomoEndTime: pomo.endTime,
+      pomoRemaining: pomo.remaining,
+      pomoSets: pomo.sets,
+      pomoHalfNotified: pomo.halfNotified,
+    };
+    try { chrome.storage.local.set(s); } catch (_) {}
+  }
+
+  function loadPomoState(data) {
+    if (!data) return;
+    if (data.pomoMode) pomo.mode = data.pomoMode;
+    if (typeof data.pomoSets === 'number') pomo.sets = data.pomoSets;
+    if (typeof data.pomoHalfNotified === 'boolean') pomo.halfNotified = data.pomoHalfNotified;
+    if (data.pomoRunning && data.pomoEndTime > Date.now()) {
+      pomo.running = true;
+      pomo.endTime = data.pomoEndTime;
+      pomo.remaining = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
+    } else if (typeof data.pomoRemaining === 'number') {
+      pomo.running = false;
+      pomo.remaining = data.pomoRemaining;
+      pomo.endTime = 0;
+    }
+    updatePomoUI();
+  }
+
   // ---------- 질문 바 ----------
   function buildAsk() {
     askEl = el('div', 'bubble tail ask', sh);
@@ -610,20 +1071,21 @@
     micEl.width = mw * 2; micEl.height = mh * 2;
     micEl.title = SR ? '눌러서 말하기' : '이 브라우저에선 음성 인식이 안 돼';
     D.drawIcon(micEl.getContext('2d'), 'mic', 2, '#b0446e');
-    micEl.addEventListener('click', toggleMic);
+    micEl.addEventListener('click', () => { play8Bit('click'); toggleMic(); });
 
     askInput = el('input', null, row);
     askInput.type = 'text';
     askInput.maxLength = 120;
     const send = el('button', null, row);
     send.textContent = '물어봐';
-    send.addEventListener('click', sendAsk);
+    send.addEventListener('click', () => { play8Bit('click'); sendAsk(); });
 
     footEl = el('div', 'foot', askEl);
     footEl.appendChild(document.createTextNode(FOOT));
     chatEl = el('span', 'chat', footEl);
     chatEl.addEventListener('click', (e) => {
       e.stopPropagation();
+      play8Bit('click');
       if (chat.length) { newChat(); } else { cfg.keepChat = !cfg.keepChat; saveCfg({ keepChat: cfg.keepChat }); }
       showChatState();
     });
@@ -636,7 +1098,7 @@
 
     askInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') sendAsk();
+      if (e.key === 'Enter') { play8Bit('click'); sendAsk(); }
       else if (e.key === 'Escape') closeAsk(true);
     });
   }
@@ -830,6 +1292,7 @@
     say.hidden = true;
     busy = true;
     setState('listen'); idleSince = Date.now();
+    play8Bit('click');
     popHearts(1 + Math.floor(Math.random() * 3));
 
     let done = false;
@@ -874,12 +1337,14 @@
     render();
   });
   addEventListener('visibilitychange', () => { if (!document.hidden) idleSince = Date.now(); });
-  addEventListener('pagehide', () => { flushCounts(); saveDogPos(); });
+  addEventListener('pagehide', () => { flushCounts(); saveDogPos(); savePomoState(); });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && askOpen) closeAsk(false);
+    if (e.key === 'Escape' && pomo?.hudOpen) closePomoHud();
   }, true);
   addEventListener('mousedown', (e) => {
     if (askOpen && !e.composedPath().includes(askEl)) closeAsk(false);
+    if (pomo?.hudOpen && pomoEl && !e.composedPath().includes(pomoEl)) closePomoHud();
   }, true);
 
   new MutationObserver(() => {
@@ -891,6 +1356,7 @@
     counts = v.counts || {};
     const used = Object.values(counts);
     seq = used.length ? Math.max(...used) : 0;
+    loadPomoState(v);
     if (cfg.enabled) start();
   });
 
@@ -899,6 +1365,14 @@
     for (const k in ch) if (k !== 'counts' && k !== 'dogPos') cfg[k] = ch[k].newValue;
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
     if ('dog' in ch) applyDog();
+    if ('pomoOn' in ch) applyPomoVisibility();
+    if ('pomoMode' in ch || 'pomoRunning' in ch || 'pomoEndTime' in ch || 'pomoRemaining' in ch || 'pomoSets' in ch) {
+      const updated = {};
+      for (const k of ['pomoMode', 'pomoRunning', 'pomoEndTime', 'pomoRemaining', 'pomoSets', 'pomoHalfNotified']) {
+        if (k in ch) updated[k] = ch[k].newValue;
+      }
+      loadPomoState(updated);
+    }
     if (('freq' in ch || 'pos' in ch || 'size' in ch || 'edge' in ch) && root) {
       if ('pos' in ch || 'size' in ch || 'edge' in ch) for (const b of [...live]) kill(b);
       if (!plan().max) { clearTimeout(nextT); for (const b of [...live]) kill(b); }
