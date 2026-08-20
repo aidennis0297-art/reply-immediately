@@ -95,7 +95,9 @@
     <div class="next" id="next">쓰다듬으면 애정도가 올라가요</div>
   </div>
 
+  <label class="row">강아지 보이기 <input type="checkbox" id="dog"></label>
   <label class="row">마우스 따라오기 <input type="checkbox" id="follow"></label>
+  <label class="row">대화 이어가기 <input type="checkbox" id="keepChat"></label>
 
   <div class="sec">말투</div>
   <div class="grid" id="modes">
@@ -103,7 +105,10 @@
     <button data-v="commu">커뮤</button>
     <button data-v="tsun">츤데레</button>
     <button data-v="sunbi">선비</button>
+    <button data-v="all" style="grid-column:1/-1">모두<small>말풍선 색으로 구분</small></button>
   </div>
+  <p class="hint">모두를 고르면 네 말투가 섞여 나와요.
+    커뮤는 남색, 선비는 고동색, 츤데레는 하트 무늬, 기본은 알록달록.</p>
 
   <div class="sec">말풍선 위치</div>
   <div class="grid five" id="poss">
@@ -150,7 +155,8 @@
   <p class="hint">AI가 사이트마다 만든 멘트를 주소와 함께 쌓아둡니다.
     다음에 같은 사이트에 가면 이걸 다시 써서 API를 아껴요.</p>
 
-  <p class="tip"><b>Alt+F</b> 또는 개를 클릭하면 질문 창이 열립니다. 마이크로도 물어볼 수 있어요.<br>
+  <p class="tip"><b>강아지를 클릭</b>하면 바로 위에 질문 바가 열립니다.
+    마이크로도 물어볼 수 있고, 바 양쪽 모서리를 끌면 폭이 바뀝니다.<br>
     쓰다듬을 때마다 하트가 뜨고, 10번마다 애정도 +1.</p>
 
   <script src="dog.js"></script>

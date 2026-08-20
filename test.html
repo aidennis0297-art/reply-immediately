@@ -34,6 +34,7 @@ Object.defineProperty(document, 'hidden', { get: () => false, configurable: true
 let pets = 0;
 window.__store = {};
 window.__tabs = 3;
+window.__store = window.__store || {};
 window.chrome = {
   runtime: {
     getURL: (p) => p,

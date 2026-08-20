@@ -1,25 +1,37 @@
 // 화면 양쪽에서 말풍선이 뜨고, 아래에서는 도트 골든 리트리버가 돌아다닌다.
-//  · 사이드 말풍선 — 좌/우 가장자리. 빈도 설정에 따라 정해진 수를 계속 채운다.
+//  · 사이드 말풍선 — 좌/우(또는 위/아래) 가장자리. 설정한 개수만큼 계속 채운다.
 //  · 개 말풍선     — 쓰다듬었을 때 꿀팁·애정도 멘트.
-//  · 질문 패널     — Alt+F 또는 개를 클릭하면 화면 가운데. 마이크와 타자 둘 다 받는다.
+//  · 질문 바       — 개를 클릭하면 개 위에 뜬다. 마이크와 타자 둘 다 받는다.
 (() => {
   const D = globalThis.CB_DOG, LINES = globalThis.CB_LINES;
   if (!D || !LINES || window.top !== window) return;   // 아이프레임에는 안 붙인다
 
   const SCALE = 3, DOG_W = D.W * SCALE, DOG_H = D.H * SCALE;
-  const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 'normal',
-                     follow: true, pos: 'both', size: 100, edge: 16 };
+  const MODES = ['basic', 'commu', 'tsun', 'sunbi'];
+  const DEFAULTS = {
+    enabled: true, mode: 'basic', ai: true, freq: 3, follow: true,
+    pos: 'both', size: 100, edge: 16, dog: true, keepChat: true, barW: 340,
+  };
   const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
-  const SS = 'cheerBuddy.bubbles';
+  const CHAT_KEY = 'cheerBuddy.chat';
   const TICK = 100, WALK_PX = 14, SLEEP_AFTER = 75000;
   const FOLLOW_GAP = 70, FOLLOW_GIVEUP = 8000;
   const LIFE = [2800, 16000];
-  // 말풍선을 화면 어디에 띄울지
   const SIDES = { right: ['right'], left: ['left'], both: ['left', 'right'],
                   top: ['top'], bottom: ['bottom'] };
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // 츤데레 말풍선에 깔 하트 무늬. 도트 하트를 그려 배경 이미지로 쓴다.
+  const heartPattern = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 22;
+    const x = c.getContext('2d');
+    x.globalAlpha = 0.28;
+    D.drawIcon(x, 'heart', 2, '#ff8fbb');
+    return c.toDataURL();
+  })();
 
   const CSS = `
   *{box-sizing:border-box;margin:0;padding:0}
@@ -45,74 +57,75 @@
           letter-spacing:.2px;word-break:keep-all;white-space:pre-wrap;text-align:left;
           box-shadow:0 4px 0 rgba(0,0,0,.10),inset 0 3px 0 rgba(255,255,255,.6)}
 
-  /* 화면 양쪽에서 미끄러져 들어온다 */
   .side{max-width:44vw}
   .side.left{animation:inL .38s cubic-bezier(.2,1.5,.4,1) both}
   .side.right{animation:inR .38s cubic-bezier(.2,1.5,.4,1) both}
-  @keyframes inL{from{opacity:0;transform:translateX(-34px) scale(.88)}
-                 to{opacity:1;transform:none}}
-  @keyframes inR{from{opacity:0;transform:translateX(34px) scale(.88)}
-                 to{opacity:1;transform:none}}
   .side.top{animation:inT .38s cubic-bezier(.2,1.5,.4,1) both}
   .side.bottom{animation:inB .38s cubic-bezier(.2,1.5,.4,1) both}
-  @keyframes inT{from{opacity:0;transform:translateY(-30px) scale(.9)}
-                 to{opacity:1;transform:none}}
-  @keyframes inB{from{opacity:0;transform:translateY(30px) scale(.9)}
-                 to{opacity:1;transform:none}}
-  .side.top.out{animation:outT .3s ease-in forwards}
-  .side.bottom.out{animation:outB .3s ease-in forwards}
-  @keyframes outT{to{opacity:0;transform:translateY(-22px) scale(.92)}}
-  @keyframes outB{to{opacity:0;transform:translateY(22px) scale(.92)}}
+  @keyframes inL{from{opacity:0;transform:translateX(-34px) scale(.88)}to{opacity:1;transform:none}}
+  @keyframes inR{from{opacity:0;transform:translateX(34px) scale(.88)}to{opacity:1;transform:none}}
+  @keyframes inT{from{opacity:0;transform:translateY(-30px) scale(.9)}to{opacity:1;transform:none}}
+  @keyframes inB{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:none}}
   .side.left.out{animation:outL .3s ease-in forwards}
   .side.right.out{animation:outR .3s ease-in forwards}
+  .side.top.out{animation:outT .3s ease-in forwards}
+  .side.bottom.out{animation:outB .3s ease-in forwards}
   @keyframes outL{to{opacity:0;transform:translateX(-24px) scale(.9)}}
   @keyframes outR{to{opacity:0;transform:translateX(24px) scale(.9)}}
-  .side.quiet{animation:none;opacity:1}
+  @keyframes outT{to{opacity:0;transform:translateY(-22px) scale(.92)}}
+  @keyframes outB{to{opacity:0;transform:translateY(22px) scale(.92)}}
 
-  /* 개가 무는 말풍선. 꼬리가 개를 가리킨다 */
+  /* 개가 무는 말풍선과 질문 바. 꼬리가 개를 가리킨다 */
+  .tail{transform-origin:var(--tail) 130%}
+  .tail::before,.tail::after{content:'';position:absolute;border-style:solid}
+  .tail::before{left:calc(var(--tail) - 9px);bottom:-14px;
+                border-width:11px 9px 0 9px;border-color:var(--ink) transparent transparent}
+  .tail::after{left:calc(var(--tail) - 6px);bottom:-8px;
+               border-width:8px 6px 0 6px;border-color:var(--bg) transparent transparent}
   .say{bottom:${DOG_H + 16}px;left:0;max-width:264px;font-size:15px;
-       transform-origin:var(--tail) 130%;
        animation:pop .34s cubic-bezier(.2,1.6,.4,1) both}
-  .say::before,.say::after{content:'';position:absolute;border-style:solid}
-  .say::before{left:calc(var(--tail) - 9px);bottom:-14px;
-               border-width:11px 9px 0 9px;border-color:var(--ink) transparent transparent}
-  .say::after{left:calc(var(--tail) - 6px);bottom:-8px;
-              border-width:8px 6px 0 6px;border-color:var(--bg) transparent transparent}
   .say.out{animation:bye .32s ease-in forwards}
   @keyframes pop{0%{opacity:0;transform:scale(.4) translateY(12px)}
                  100%{opacity:1;transform:scale(1) translateY(0)}}
   @keyframes bye{to{opacity:0;transform:scale(.85) translateY(8px)}}
 
-  /* 화면 한가운데 질문 패널 */
-  .ask{position:absolute;left:50%;top:34%;width:min(430px,86vw);max-width:none;
-       transform:translate(-50%,-50%);pointer-events:auto;
-       --bg:#fff6fb;--ink:#b0446e;padding:14px 15px 12px;
-       box-shadow:0 8px 0 rgba(0,0,0,.12),inset 0 3px 0 rgba(255,255,255,.7),
-                  0 0 0 9999px rgba(40,20,35,.22);
-       animation:askIn .3s cubic-bezier(.2,1.6,.4,1) both}
-  @keyframes askIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.86)}
-                   100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
-  .ask h3{font:400 15px/1.4 'CBGalmuri',monospace;margin-bottom:3px}
-  .ask .nudge{font:400 12px/1.5 'CBGalmuri',monospace;opacity:.72;margin-bottom:9px}
-  .ask .row{display:flex;align-items:center;gap:8px}
+  /* 개 위에 붙는 질문 바 */
+  .ask{bottom:${DOG_H + 16}px;left:0;--bg:#fff6fb;--ink:#b0446e;
+       padding:9px 10px 8px;pointer-events:auto;
+       animation:pop .3s cubic-bezier(.2,1.6,.4,1) both}
+  .ask .row{display:flex;align-items:center;gap:6px}
   .ask canvas{cursor:pointer;image-rendering:pixelated;flex:none;
-              padding:4px;border:2px solid var(--ink);border-radius:9px;
+              padding:3px;border:2px solid var(--ink);border-radius:8px;
               background:rgba(255,255,255,.8)}
   .ask canvas.rec{background:#ffdbe6;animation:blink .8s steps(2,end) infinite}
   @keyframes blink{50%{opacity:.35}}
-  .ask input{flex:1;min-width:0;border:2px solid var(--ink);border-radius:9px;
-             background:rgba(255,255,255,.85);color:var(--ink);
-             font:400 14px 'CBGalmuri',monospace;padding:7px 9px;outline:none}
+  .ask input{flex:1;min-width:60px;border:2px solid var(--ink);border-radius:8px;
+             background:rgba(255,255,255,.9);color:var(--ink);
+             font:400 14px 'CBGalmuri',monospace;padding:6px 8px;outline:none}
   .ask input::placeholder{color:var(--ink);opacity:.45}
-  .ask button{flex:none;border:2px solid var(--ink);border-radius:9px;cursor:pointer;
+  .ask button{flex:none;border:2px solid var(--ink);border-radius:8px;cursor:pointer;
               background:#ffd9ea;color:var(--ink);
-              font:400 13px 'CBGalmuri',monospace;padding:7px 11px}
+              font:400 12px 'CBGalmuri',monospace;padding:6px 8px}
   .ask button:hover{background:#ffc7de}
-  .ask .foot{margin-top:8px;font:400 11px 'CBGalmuri',monospace;opacity:.6}
+  .ask .foot{margin-top:6px;font:400 11px 'CBGalmuri',monospace;opacity:.62;
+             display:flex;justify-content:space-between;gap:8px}
+  .ask .foot .chat{cursor:pointer;text-decoration:underline;white-space:nowrap}
+  .grip{position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;
+        cursor:ew-resize;border-right:3px solid var(--ink);border-bottom:3px solid var(--ink);
+        border-radius:0 0 6px 0;opacity:.55}
+  .grip:hover{opacity:1}
+  .grip.l{left:-3px;right:auto;cursor:ew-resize;
+          border:0;border-left:3px solid var(--ink);border-bottom:3px solid var(--ink);
+          border-radius:0 0 0 6px}
 
   .c1{--bg:#ffd9ea;--ink:#b0446e}.c2{--bg:#d3f5e5;--ink:#2b8a66}.c3{--bg:#fff2c2;--ink:#a8791f}
   .c4{--bg:#e4dcff;--ink:#6a51c2}.c5{--bg:#d5ecff;--ink:#356ea8}.c6{--bg:#ffe4d2;--ink:#c26a2f}
   .c7{--bg:#e6f7c7;--ink:#5d8a24}
+  /* 말투마다 고유한 색. '모두' 모드에서 누가 말했는지 색으로 안다 */
+  .p-commu{--bg:#dde5f7;--ink:#1f3d78}
+  .p-sunbi{--bg:#f0e3d1;--ink:#5c3a1e}
+  .p-tsun{--bg:#ffe6f0;--ink:#c2367a;
+          background-image:url(${heartPattern});background-repeat:repeat}
   .k-warn{--bg:#ffe2e2;--ink:#c0392b;border-style:dashed}
   .k-tip{--bg:#d9f7e6;--ink:#20805a}
   .k-info{--bg:#e2edff;--ink:#3a68b0}
@@ -125,28 +138,38 @@
   const CANDY = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'];
   const KIND_CLS = { warn: 'k-warn', tip: 'k-tip', info: 'k-info',
                      bond: 'k-bond', answer: 'k-answer' };
+  const PERSONA_CLS = { commu: 'p-commu', tsun: 'p-tsun', sunbi: 'p-sunbi' };
 
   let cfg = { ...DEFAULTS };
-  let root, sh, cv, ctx, say, zzz, askEl, askInput, micEl, footEl;
-  const FOOT = 'Enter 로 보내기 · Esc 로 닫기 · 대답은 양옆 말풍선으로 나와';
-  const micHint = (t) => { if (footEl) footEl.textContent = t || FOOT; };
-  const live = new Set();                       // 지금 떠 있는 사이드 말풍선
+  let root, sh, cv, ctx, say, zzz, askEl, askInput, micEl, footEl, chatEl;
+  const FOOT = 'Enter 로 보내기 · Esc 로 닫기';
+  const micHint = (t) => { if (footEl) footEl.firstChild.textContent = t || FOOT; };
+  const live = new Set();
   const dog = { x: 60, dir: 1, state: 'sit', frame: 0, target: 0, acc: 0 };
   let tickT = 0, nextT = 0, sayT = 0, tabT = 0, arrive = null, rec = null;
   let recent = [], queue = [], lastFetch = 0, href = location.href;
-  let counts = {}, delta = {}, flushT = 0;     // 멘트별 출력 횟수 (적게 나온 것부터 고른다)
+  let counts = {}, delta = {}, flushT = 0;
   let idleSince = Date.now(), lastScroll = 0, busy = false, lastPoke = 0;
   let mouseX = null, mouseAt = 0, nextSide = Math.random() < 0.5 ? 'left' : 'right';
-  // 지금 화면 상황. '@tabs>=8|...' 같은 조건이 붙은 멘트를 걸러내는 데 쓴다.
+  let askOpen = false, chat = [];
   const flags = { tabs: 0, scroll: 0, stay: 0, idle: 0, long: 0, video: 0, forms: 0 };
   let pageAt = Date.now(), flagT = 0;
-  let askOpen = false;
 
   const clampX = (x) => Math.max(4, Math.min(innerWidth - DOG_W - 4, x));
-  // 말풍선 크기 배율. 60~140% 사이로 설정에서 조절한다.
   const zoom = () => Math.max(0.6, Math.min(1.4, (cfg.size || 100) / 100));
-  // 화면 끝에서 얼마나 띄울지. 0이면 가장자리에 딱 붙는다.
   const edge = () => Math.max(0, Math.min(60, cfg.edge == null ? 16 : cfg.edge));
+  const dogOn = () => cfg.dog !== false;
+  // '모두' 를 고르면 말풍선마다 말투가 바뀐다
+  const activeMode = () => (cfg.mode === 'all' ? pick(MODES)
+                            : MODES.includes(cfg.mode) ? cfg.mode : 'basic');
+
+  function plan() {
+    const raw = typeof cfg.freq === 'number' ? cfg.freq : (OLD_FREQ[cfg.freq] ?? 3);
+    const max = Math.max(0, Math.min(10, Math.round(raw)));
+    if (!max) return { min: 0, max: 0, gap: [0, 0] };
+    return { min: Math.max(1, max - 1), max,
+             gap: [Math.max(320, 3000 / max), Math.max(900, 7000 / max)] };
+  }
 
   // ---------- 지금 무슨 상황인지 ----------
   const COND = /^@([a-z]+)(>=|<=|>|<)?(\d+)?\|/;
@@ -157,14 +180,11 @@
     flags.scroll = Math.min(100, Math.round((scrollY / room) * 100));
     flags.stay = Math.round((Date.now() - pageAt) / 1000);
     flags.idle = mouseAt ? Math.round((Date.now() - mouseAt) / 1000) : 0;
-    // textContent 는 innerText 와 달리 레이아웃을 건드리지 않아서 싸다
     flags.long = (document.body?.textContent || '').length;
-    flags.video = [...document.querySelectorAll('video')]
-      .some((v) => !v.paused && !v.ended) ? 1 : 0;
+    flags.video = [...document.querySelectorAll('video')].some((v) => !v.paused && !v.ended) ? 1 : 0;
     flags.forms = document.querySelectorAll('input:not([type=hidden]),textarea').length;
   }
 
-  // 열린 탭 수는 백그라운드만 안다. tabs 권한 없이 개수만 세어 온다.
   function readTabs() {
     try {
       chrome.runtime.sendMessage({ type: 'tabs' }, (n) => {
@@ -180,14 +200,6 @@
     const n = +m[3];
     return m[2] === '>=' ? v >= n : m[2] === '<=' ? v <= n
          : m[2] === '>' ? v > n : v < n;
-  }
-  // 동시에 띄울 목표 개수(0~10)와, 빈자리를 채우러 오는 간격(ms)
-  function plan() {
-    const raw = typeof cfg.freq === 'number' ? cfg.freq : (OLD_FREQ[cfg.freq] ?? 3);
-    const max = Math.max(0, Math.min(10, Math.round(raw)));
-    if (!max) return { min: 0, max: 0, gap: [0, 0] };
-    return { min: Math.max(1, max - 1), max,
-             gap: [Math.max(320, 3000 / max), Math.max(900, 7000 / max)] };
   }
 
   // ---------- 화면 붙이기 ----------
@@ -207,23 +219,22 @@
     sh = root.attachShadow({ mode: 'open' });
     el('style', null, sh).textContent = CSS;
 
-    say = el('div', 'bubble say c1', sh); say.hidden = true;
+    say = el('div', 'bubble tail say c1', sh); say.hidden = true;
     cv = el('canvas', 'dog', sh);
     cv.width = DOG_W; cv.height = DOG_H;
-    cv.title = '멍! (누르면 질문 창이 열려)';
+    cv.title = '멍! (누르면 질문 바가 열려)';
     zzz = el('div', 'zzz', sh); zzz.textContent = 'z z';
     ctx = cv.getContext('2d');
     cv.addEventListener('click', poke);
     buildAsk();
     document.documentElement.appendChild(root);
 
-    // 폰트는 확장 리소스에서. 페이지 CSP를 타지 않는다.
-    // swap: 폰트가 늦게 와도 기본 글꼴로 먼저 보여준다
     new FontFace('CBGalmuri', `url("${chrome.runtime.getURL('fonts/Galmuri11.woff2')}")`,
                  { display: 'swap' })
       .load().then((f) => document.fonts.add(f)).catch(() => {});
 
     dog.x = clampX(dog.x);
+    applyDog();
     render();
   }
 
@@ -231,16 +242,29 @@
     clearInterval(tickT); clearInterval(tabT); clearTimeout(nextT); clearTimeout(sayT);
     for (const b of live) { clearTimeout(b._t); b.remove(); }
     live.clear();
-    tickT = nextT = sayT = 0;
+    tickT = nextT = sayT = tabT = 0;
     if (root) root.remove();
     root = null;
+  }
+
+  // 개만 따로 껐다 켰다 할 수 있다. 말풍선은 그대로 뜬다.
+  function applyDog() {
+    if (!root) return;
+    const on = dogOn();
+    cv.hidden = !on;
+    zzz.hidden = !on;
+    if (!on) {
+      closeAsk(false);
+      clearTimeout(sayT);
+      say.hidden = true;
+    }
   }
 
   // ---------- 개 ----------
   function setState(s) {
     if (dog.state === s) return;
     dog.state = s; dog.frame = 0; dog.acc = 0;
-    zzz.classList.toggle('on', s === 'sleep');
+    zzz.classList.toggle('on', s === 'sleep' && dogOn());
   }
 
   function render() {
@@ -249,12 +273,10 @@
     D.draw(ctx, dog.state, dog.frame, SCALE, dog.dir < 0);
   }
 
-  // 마우스를 쫓아간다. 말풍선을 물고 있거나 질문을 듣는 중엔 가만히 있는다.
   function follow(now) {
-    if (!cfg.follow || mouseX == null || !say.hidden || busy || askOpen || arrive) return;
-    if (now - mouseAt > FOLLOW_GIVEUP) return;   // 마우스가 한참 멈춰 있으면 관심을 끊는다
+    if (!cfg.follow || !dogOn() || mouseX == null || !say.hidden || busy || askOpen || arrive) return;
+    if (now - mouseAt > FOLLOW_GIVEUP) return;
     const want = clampX(mouseX - DOG_W / 2);
-    // 70px 안쪽이면 앉는다. 이 여유가 없으면 커서에 딱 붙어 덜덜 떤다.
     if (Math.abs(want - dog.x) <= FOLLOW_GAP) {
       if (dog.state === 'walk') setState('sit');
       return;
@@ -268,7 +290,11 @@
     if (document.hidden) return;
     const now = Date.now();
     if (location.href !== href) {
-      href = location.href; queue = []; lastFetch = 0; pageAt = now;
+      // 페이지가 바뀌면 앞 페이지에서 만든 건 전부 버린다
+      href = location.href; pageAt = now;
+      queue = []; lastFetch = 0;
+      for (const b of [...live]) drop(b);
+      clearTimeout(sayT); say.hidden = true;
     }
     if (now - flagT > 2000) { flagT = now; readFlags(); }
 
@@ -282,7 +308,8 @@
       } else {
         dog.dir = Math.sign(dx); dog.x += dog.dir * WALK_PX;
       }
-      if (!say.hidden) placeSay();          // 말풍선을 문 채 움직이면 꼬리도 따라간다
+      if (!say.hidden) place(say);
+      if (askOpen) place(askEl);
     } else if (dog.state === 'sit' && say.hidden && !busy && !askOpen &&
                now - idleSince > SLEEP_AFTER) {
       setState('sleep');
@@ -294,11 +321,9 @@
   }
 
   // ---------- 멘트 고르기 ----------
-  // 지금 시간·상황에 맞는 멘트를 골라낸다.
-  // 딱 들어맞는 게 있으면 그걸 우선 보여준다 — 탭이 열두 개일 때 탭 정리 얘기가 나와야 재밌으니까.
-  function pool() {
+  function pool(mode) {
     const h = new Date().getHours();
-    const src = LINES[cfg.mode] || LINES.basic;
+    const src = LINES[mode] || LINES.basic;
     const fit = [], plain = [];
     for (const s of src) {
       const t = /^(\d+)-(\d+)\|/.exec(s);
@@ -316,7 +341,6 @@
     return (fit.length && Math.random() < 0.65) ? fit : plain.concat(fit);
   }
 
-  // 적게 나온 멘트부터 고른다. 다만 열에 셋은 그냥 랜덤 — 순서가 뻔해지지 않게.
   function leastUsed(list) {
     if (!list.length) return '';
     if (Math.random() < 0.3) return pick(list);
@@ -329,13 +353,34 @@
     return pick(best);
   }
 
-  function pickLocal(list) {
-    const all = list || pool();
-    const fresh = all.filter((t) => !recent.includes(t));
-    return leastUsed(fresh.length ? fresh : all);
+  function pickFrom(list) {
+    const fresh = list.filter((t) => !recent.includes(t));
+    return leastUsed(fresh.length ? fresh : list);
   }
 
-  // 페이지에서 진짜 핵심만 뽑는다. 본문 통째로 보내면 모델이 요약을 시작한다.
+  function remember(t) {
+    recent.push(t); if (recent.length > 24) recent.shift();
+    counts[t] = (counts[t] || 0) + 1;
+    delta[t] = (delta[t] || 0) + 1;
+    clearTimeout(flushT);
+    flushT = setTimeout(flushCounts, 12000);
+  }
+
+  function flushCounts() {
+    const d = delta;
+    if (!Object.keys(d).length) return;
+    delta = {};
+    try {
+      chrome.storage.local.get({ counts: {} }, (v) => {
+        void chrome.runtime.lastError;
+        const merged = v.counts || {};
+        for (const k in d) merged[k] = (merged[k] || 0) + d[k];
+        counts = merged;
+        chrome.storage.local.set({ counts: merged });
+      });
+    } catch (_) { /* ignore */ }
+  }
+
   function pageContext() {
     const meta = (sel) => document.querySelector(sel)?.content?.trim() || '';
     const clean = (s) => (s || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -358,60 +403,40 @@
     };
   }
 
-  // 큐가 비면 백그라운드로 10개 채워둔다. 지금 말할 대사를 기다리게 만들지 않는다.
   function refill() {
     if (!cfg.ai || queue.length > 2 || Date.now() - lastFetch < 45000) return;
     lastFetch = Date.now();
+    const mode = activeMode();
     try {
       chrome.runtime.sendMessage(
-        { type: 'lines', mode: cfg.mode, ctx: pageContext() },
+        { type: 'lines', mode, ctx: pageContext() },
         (res) => {
           void chrome.runtime.lastError;
-          if (Array.isArray(res) && res.length) queue.push(...res);
+          if (Array.isArray(res) && res.length) {
+            queue.push(...res.map((r) => ({ ...r, persona: mode })));
+          }
         }
       );
-    } catch (_) { /* 확장이 방금 리로드된 경우 */ }
+    } catch (_) { /* ignore */ }
   }
 
-  function remember(t) {
-    recent.push(t); if (recent.length > 24) recent.shift();
-    counts[t] = (counts[t] || 0) + 1;
-    delta[t] = (delta[t] || 0) + 1;
-    clearTimeout(flushT);
-    flushT = setTimeout(flushCounts, 12000);   // 탭마다 쓰지 않게 몰아서 저장
-  }
-
-  function flushCounts() {
-    const d = delta;
-    if (!Object.keys(d).length) return;
-    delta = {};
-    try {
-      chrome.storage.local.get({ counts: {} }, (v) => {
-        void chrome.runtime.lastError;
-        const merged = v.counts || {};
-        for (const k in d) merged[k] = (merged[k] || 0) + d[k];
-        counts = merged;
-        chrome.storage.local.set({ counts: merged });
-      });
-    } catch (_) { /* 확장이 방금 리로드된 경우 */ }
-  }
-
-  // 큐는 순차로 꺼내되 가끔 로컬 멘트를 섞어 예측을 깬다.
-  // 꿀팁은 개 몫이라 사이드 말풍선에서는 건너뛴다.
   function nextLine() {
     refill();
     const i = queue.findIndex((q) => q.kind !== 'tip' && !recent.includes(q.text));
-    const item = (i >= 0 && Math.random() < 0.78)
-      ? queue.splice(i, 1)[0]
-      : { text: pickLocal(), kind: '' };
-    remember(item.text);
-    return item;
+    if (i >= 0 && Math.random() < 0.78) {
+      const item = queue.splice(i, 1)[0];
+      remember(item.text);
+      return item;
+    }
+    const mode = activeMode();
+    const text = pickFrom(pool(mode));
+    remember(text);
+    return { text, kind: '', persona: mode };
   }
 
-  // 개가 물 대사: AI가 준 꿀팁이 있으면 그걸, 없으면 내장 꿀팁.
   function nextTip() {
     const i = queue.findIndex((q) => q.kind === 'tip' && !recent.includes(q.text));
-    const text = i >= 0 ? queue.splice(i, 1)[0].text : pickLocal(LINES.tips);
+    const text = i >= 0 ? queue.splice(i, 1)[0].text : pickFrom(LINES.tips);
     remember(text);
     return text;
   }
@@ -420,7 +445,7 @@
   function schedule() {
     clearTimeout(nextT);
     const p = plan();
-    if (!p.max) return;                       // 조용 모드면 아무것도 안 띄운다
+    if (!p.max) return;
     nextT = setTimeout(fill, rnd(p.gap[0], p.gap[1]));
   }
 
@@ -429,21 +454,18 @@
     const p = plan();
     if (!p.max) return;
     if (document.hidden) { nextT = setTimeout(fill, 3000); return; }
-    // 빈자리를 채우되 한 번에 최대 두 개까지만. 그래야 와다다 터지지 않는다.
     const want = Math.round(rnd(p.min, p.max + 0.49));
     const need = Math.min(2, want - live.size);
     for (let i = 0; i < need; i++) {
       setTimeout(() => {
         if (!cfg.enabled || !root || live.size >= p.max) return;
         const item = nextLine();
-        spawn(item.text, item.kind);
+        spawn(item.text, item.kind, { persona: item.persona });
       }, i * 320);
     }
     schedule();
   }
 
-  // 같은 자리에 이미 뜬 말풍선과 겹치지 않는 위치를 찾는다.
-  // 좌·우 벽은 세로로, 위·아래 밴드는 가로로 흩어놓는다.
   function freeSlot(side, size) {
     const vert = side === 'left' || side === 'right';
     const pad = Math.min(10, edge());
@@ -468,73 +490,68 @@
     return s;
   }
 
-  // 크기도 색도 높이도 매번 다르게 — 같은 자리에 같은 말풍선이 반복되지 않게.
   function spawn(text, kind, opt = {}) {
     const side = opt.side || nextPlace();
-    const b = el('div', 'bubble side ' + side + ' ' +
-                 (opt.cls || KIND_CLS[kind] || pick(CANDY)), sh);
+    const cls = KIND_CLS[kind] || PERSONA_CLS[opt.persona] || pick(CANDY);
+    const b = el('div', 'bubble side ' + side + ' ' + cls, sh);
     b.textContent = text;
     b.dataset.side = side;
     const z = zoom();
-    b.style.fontSize = (opt.size || Math.round(rnd(13, 18.9) * z)) + 'px';
-    b.style.maxWidth = (opt.width || Math.round(rnd(170, 320) * z)) + 'px';
-    if (opt.quiet) b.classList.add('quiet');
+    b.style.fontSize = Math.round(rnd(13, 18.9) * z) + 'px';
+    b.style.maxWidth = Math.round(rnd(170, 320) * z) + 'px';
 
-    // 좌·우는 벽에 붙여 세로로, 위·아래는 밴드 안에서 가로로 흩어놓는다.
     const vert = side === 'left' || side === 'right';
-    // 아래쪽만 개(54px) 위로 비켜서고, 나머지는 설정한 여백 안에서 화면 끝까지 붙는다.
     const e = edge();
-    const cross = opt.cross != null ? opt.cross
-      : Math.round(side === 'bottom' ? 58 + rnd(0, e) : rnd(0, e));
+    const cross = Math.round(side === 'bottom' ? 58 + rnd(0, e) : rnd(0, e));
     b.style[side] = cross + 'px';
     b.style[vert ? 'bottom' : 'left'] = '0px';
-    const main = opt.main != null ? opt.main
-      : freeSlot(side, vert ? b.offsetHeight : b.offsetWidth);
-    b.style[vert ? 'bottom' : 'left'] = main + 'px';
-    b._pos = { cross, main };
+    b.style[vert ? 'bottom' : 'left'] =
+      freeSlot(side, vert ? b.offsetHeight : b.offsetWidth) + 'px';
     live.add(b);
 
-    // 읽는 데 필요한 최소 시간에 넉넉한 편차를 곱한다.
-    // 편차가 좁으면 같이 뜬 말풍선이 같이 사라져서 눈에 띈다.
     const need = LIFE[0] + text.length * 90;
-    const dur = opt.until ? opt.until - Date.now()
-                          : Math.min(LIFE[1], need * rnd(0.75, 2.3));
-    b._until = Date.now() + dur;
+    const dur = Math.min(LIFE[1], need * rnd(0.75, 2.3));
     b._t = setTimeout(() => kill(b), Math.max(1200, dur));
-    persist();
     return b;
   }
 
   function kill(b) {
     if (!live.has(b)) return;
-    // 탭을 안 보고 있거나 방금 스크롤했으면 조금 더 띄워둔다
     if (document.hidden || Date.now() - lastScroll < 1200) {
       b._t = setTimeout(() => kill(b), 1200); return;
     }
     b.classList.add('out');
     live.delete(b);
     setTimeout(() => b.remove(), 320);
-    persist();
+  }
+
+  // 페이지가 바뀌었을 때처럼 즉시 치울 때
+  function drop(b) {
+    clearTimeout(b._t);
+    live.delete(b);
+    b.remove();
   }
 
   // ---------- 개 말풍선 ----------
   function showSay(text, kind) {
+    if (!dogOn()) return;
     say.textContent = text;
-    say.className = 'bubble say ' + (KIND_CLS[kind] || 'k-tip');
+    say.className = 'bubble tail say ' + (KIND_CLS[kind] || 'k-tip');
     say.style.fontSize = Math.round(15 * zoom()) + 'px';
     say.style.maxWidth = Math.round(264 * zoom()) + 'px';
     say.hidden = false;
-    placeSay();
+    place(say);
     clearTimeout(sayT);
     sayT = setTimeout(hideSay, Math.min(11000, 2600 + text.length * 120) * rnd(0.9, 1.2));
     idleSince = Date.now();
   }
 
-  function placeSay() {
-    const w = say.offsetWidth, cx = dog.x + DOG_W / 2;
+  // 개 위에 올려놓고 꼬리가 개를 가리키게 한다
+  function place(node) {
+    const w = node.offsetWidth, cx = dog.x + DOG_W / 2;
     const left = Math.max(8, Math.min(innerWidth - w - 8, Math.round(cx - w / 2)));
-    say.style.left = left + 'px';
-    say.style.setProperty('--tail', (cx - left) + 'px');
+    node.style.left = left + 'px';
+    node.style.setProperty('--tail', (cx - left) + 'px');
   }
 
   function hideSay() {
@@ -555,18 +572,17 @@
       c.style.left = Math.round(dog.x + DOG_W / 2 - 10 + rnd(-16, 16)) + 'px';
       c.style.animationDelay = i * 120 + 'ms';
       c.addEventListener('animationend', () => c.remove());
-      setTimeout(() => c.remove(), 2500);   // 렌더가 멈춰 animationend 가 안 와도 치운다
+      setTimeout(() => c.remove(), 2500);
       sh.appendChild(c);
     }
   }
 
-  // ---------- 질문 패널 ----------
+  // ---------- 질문 바 ----------
   function buildAsk() {
-    askEl = el('div', 'bubble ask', sh);
+    askEl = el('div', 'bubble tail ask', sh);
     askEl.hidden = true;
-    el('h3', null, askEl).textContent = '뭐 물어볼래?';
-    el('div', 'nudge', askEl).textContent =
-      '짧게 한 가지만! 긴 건 말풍선에 안 들어가.  예) 이 사이트 믿을 만해?';
+    askEl.style.width = (cfg.barW || 340) + 'px';
+
     const row = el('div', 'row', askEl);
     micEl = el('canvas', null, row);
     const [mw, mh] = D.iconSize('mic');
@@ -574,29 +590,90 @@
     micEl.title = SR ? '눌러서 말하기' : '이 브라우저에선 음성 인식이 안 돼';
     D.drawIcon(micEl.getContext('2d'), 'mic', 2, '#b0446e');
     micEl.addEventListener('click', toggleMic);
+
     askInput = el('input', null, row);
     askInput.type = 'text';
     askInput.maxLength = 120;
     const send = el('button', null, row);
-    send.textContent = '물어보기';
+    send.textContent = '물어봐';
     send.addEventListener('click', sendAsk);
+
     footEl = el('div', 'foot', askEl);
-    micHint('');
+    footEl.appendChild(document.createTextNode(FOOT));
+    chatEl = el('span', 'chat', footEl);
+    chatEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (chat.length) { newChat(); } else { cfg.keepChat = !cfg.keepChat; saveCfg({ keepChat: cfg.keepChat }); }
+      showChatState();
+    });
+
+    // 가장자리를 잡고 좌우로 끌면 폭이 바뀐다
+    for (const cls of ['grip', 'grip l']) {
+      const g = el('div', cls, askEl);
+      g.addEventListener('mousedown', (ev) => startResize(ev, cls.includes('l') ? -1 : 1));
+    }
 
     askInput.addEventListener('keydown', (e) => {
-      e.stopPropagation();                    // 사이트 단축키와 안 부딪히게
+      e.stopPropagation();
       if (e.key === 'Enter') sendAsk();
       else if (e.key === 'Escape') closeAsk(true);
     });
   }
 
+  function startResize(ev, dir) {
+    ev.preventDefault(); ev.stopPropagation();
+    const x0 = ev.clientX, w0 = askEl.offsetWidth;
+    const move = (e) => {
+      const w = Math.max(220, Math.min(innerWidth - 40, w0 + (e.clientX - x0) * dir));
+      askEl.style.width = w + 'px';
+      place(askEl);
+    };
+    const up = () => {
+      removeEventListener('mousemove', move, true);
+      removeEventListener('mouseup', up, true);
+      saveCfg({ barW: askEl.offsetWidth });
+    };
+    addEventListener('mousemove', move, true);
+    addEventListener('mouseup', up, true);
+  }
+
+  function saveCfg(o) {
+    Object.assign(cfg, o);
+    try { chrome.storage.local.set(o); } catch (_) { /* ignore */ }
+  }
+
+  function showChatState() {
+    if (!chatEl) return;
+    chatEl.textContent = chat.length
+      ? `이어서 대화 중 (${chat.length}) · 새 대화`
+      : (cfg.keepChat ? '대화 이어가기 켬' : '대화 이어가기 끔');
+  }
+
+  function newChat() {
+    chat = [];
+    try { sessionStorage.removeItem(CHAT_KEY); } catch (_) {}
+  }
+
+  function loadChat() {
+    try { chat = JSON.parse(sessionStorage.getItem(CHAT_KEY) || '[]'); } catch (_) { chat = []; }
+    if (!Array.isArray(chat)) chat = [];
+  }
+
+  function saveChat() {
+    try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(chat.slice(-8))); } catch (_) {}
+  }
+
   function openAsk() {
-    if (!root || askOpen) return;
+    if (!root || askOpen || !dogOn()) return;
     askOpen = true;
     clearTimeout(sayT); say.hidden = true;
     askInput.value = '';
     askInput.placeholder = SR ? '말하거나 타자로 짧게!' : '짧게 한 줄로 물어봐!';
+    askEl.style.width = (cfg.barW || 340) + 'px';
     askEl.hidden = false;
+    micHint('');
+    showChatState();
+    place(askEl);
     setState('listen');
     idleSince = Date.now();
     setTimeout(() => askInput.focus(), 30);
@@ -609,7 +686,7 @@
     askEl.hidden = true;
     busy = false;
     setState('sit');
-    if (tip) showSay(nextTip(), 'tip');
+    if (tip && dogOn()) showSay(nextTip(), 'tip');
   }
 
   const MIC_ERR = {
@@ -622,15 +699,13 @@
 
   function stopMic() {
     if (rec) { try { rec.stop(); } catch (_) {} rec = null; }
-    micEl.classList.remove('rec');
+    if (micEl) micEl.classList.remove('rec');
   }
 
-  // 권한을 먼저 받아야 한다. 바로 start() 하면 크롬이 프롬프트도 안 띄우고
-  // not-allowed 로 끝내버려서 "누르자마자 꺼진다"처럼 보인다.
   async function toggleMic() {
     if (rec) { stopMic(); micHint('멈췄어. 타자로 써도 돼!'); return; }
     if (!SR) { micHint('이 브라우저는 음성 인식이 안 돼. 타자로 써줘!'); return; }
-    if (!isSecureContext) { micHint('이 사이트(http)에선 마이크가 안 돼. 타자로 써줘!'); return; }
+    if (!isSecureContext) { micHint('이 사이트(http)에선 마이크가 안 돼. 타자로!'); return; }
     micHint('마이크 준비 중...');
     try {
       const st = await navigator.permissions?.query({ name: 'microphone' }).catch(() => null);
@@ -639,7 +714,7 @@
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());   // 권한만 확인하고 바로 끈다
+      stream.getTracks().forEach((t) => t.stop());
     } catch (e) {
       micHint(e && e.name === 'NotAllowedError'
         ? '마이크를 막아놨네. 주소창 왼쪽 자물쇠 → 마이크 → 허용!'
@@ -663,7 +738,6 @@
       };
       rec.onerror = (e) => {
         stopMic();
-        // 말을 시작하기 전에 끊기는 일이 잦아서 한 번은 더 들어준다
         if (e.error === 'no-speech' && !isRetry) { micHint('안 들려. 다시 말해줘!'); startRec(true); return; }
         if (e.error === 'no-speech') { micHint('아무 말도 안 들렸어. 다시 눌러줘!'); return; }
         micHint(MIC_ERR[e.error] || '잘 못 들었어. 타자로 써줄래?');
@@ -681,6 +755,7 @@
   function sendAsk() {
     const q = askInput.value.trim();
     if (!q) return;
+    const mode = activeMode();
     closeAsk(false);
     setState('listen');
     busy = true;
@@ -691,15 +766,19 @@
       done = true;
       busy = false;
       setState('sit');
-      clearTimeout(waiting._t); kill(waiting);
-      // 대답이 여러 줄이면 좌우로 번갈아 하나씩 띄운다
+      drop(waiting);
       parts.slice(0, 4).forEach((t, i) => setTimeout(() => {
         if (cfg.enabled && root) spawn(t, 'answer');
       }, i * 800));
+      chat.push({ q, a: parts.join(' ').slice(0, 160) });
+      if (chat.length > 8) chat.shift();
+      saveChat();
+      showChatState();
     };
     try {
       chrome.runtime.sendMessage(
-        { type: 'ask', mode: cfg.mode, q, ctx: pageContext() },
+        { type: 'ask', mode, q, ctx: pageContext(),
+          history: cfg.keepChat === false ? [] : chat.slice(-4) },
         (r) => {
           void chrome.runtime.lastError;
           answer(r?.parts?.length ? r.parts : [r?.text || '잘 모르겠어...']);
@@ -709,9 +788,8 @@
     setTimeout(() => answer(['너무 오래 걸리네. 다시 물어봐줄래?']), 15000);
   }
 
-  // 쓰다듬기: 하트 뿜고 질문 창을 연다. 애정도가 오르는 순간에는 감동부터 한다.
   function poke() {
-    if (Date.now() - lastPoke < 700 || askOpen) return;
+    if (Date.now() - lastPoke < 700 || askOpen || !dogOn()) return;
     lastPoke = Date.now();
     clearTimeout(sayT);
     say.hidden = true;
@@ -734,37 +812,13 @@
         setTimeout(() => after(r?.line), 700);
       });
     } catch (_) { /* ignore */ }
-    setTimeout(() => after(null), 1100);   // 백그라운드가 안 깨어나도 창은 열린다
-  }
-
-  // ---------- 페이지를 넘어가도 이어지게 ----------
-  function persist() {
-    const list = [...live].map((b) => ({
-      side: b.dataset.side, text: b.textContent, until: b._until,
-      cls: b.className.replace(/bubble side (left|right) /, '')
-        .replace(' quiet', '').replace(' out', ''),
-      size: parseInt(b.style.fontSize, 10),
-      width: parseInt(b.style.maxWidth, 10),
-      main: b._pos?.main, cross: b._pos?.cross,
-    }));
-    if (list.length) sessionStorage.setItem(SS, JSON.stringify(list));
-    else sessionStorage.removeItem(SS);
-  }
-
-  function restore() {
-    let saved = null;
-    try { saved = JSON.parse(sessionStorage.getItem(SS) || 'null'); } catch (_) {}
-    if (!Array.isArray(saved) || !plan().max) return;
-    for (const s of saved) {
-      if (s.until - Date.now() < 900) continue;
-      spawn(s.text, null, { ...s, quiet: true });
-    }
+    setTimeout(() => after(null), 1100);
   }
 
   // ---------- 시작/정지 ----------
   function start() {
     mount();
-    restore();
+    loadChat();
     schedule();
     readFlags();
     readTabs();
@@ -778,36 +832,23 @@
   addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseAt = Date.now(); }, { passive: true });
   addEventListener('resize', () => {
     if (!root) return;
-    dog.x = clampX(dog.x); if (!say.hidden) placeSay(); render();
+    dog.x = clampX(dog.x);
+    if (!say.hidden) place(say);
+    if (askOpen) place(askEl);
+    render();
   });
   addEventListener('visibilitychange', () => { if (!document.hidden) idleSince = Date.now(); });
+  addEventListener('pagehide', flushCounts);
   addEventListener('keydown', (e) => {
-    if (!cfg.enabled || !root) return;
-    if (e.altKey && !e.ctrlKey && !e.metaKey &&
-        (e.code === 'KeyF' || e.key === 'f' || e.key === 'F' || e.key === 'ㄹ')) {
-      e.preventDefault(); e.stopPropagation();
-      if (askOpen) closeAsk(false); else openAsk();
-    } else if (e.key === 'Escape' && askOpen) {
-      closeAsk(false);
-    }
+    if (e.key === 'Escape' && askOpen) closeAsk(false);
   }, true);
-  // 패널 바깥을 누르면 닫는다
   addEventListener('mousedown', (e) => {
     if (askOpen && !e.composedPath().includes(askEl)) closeAsk(false);
   }, true);
 
-  // 툴바 단축키(chrome://extensions/shortcuts)로도 열 수 있다
-  chrome.runtime.onMessage.addListener((m) => {
-    if (m?.type !== 'openAsk' || !cfg.enabled || !root) return;
-    if (askOpen) closeAsk(false); else openAsk();
-  });
-
-  // 사이트가 body를 통째로 갈아끼워도 다시 붙는다
   new MutationObserver(() => {
     if (cfg.enabled && root && !root.isConnected) document.documentElement.appendChild(root);
   }).observe(document.documentElement, { childList: true });
-
-  addEventListener('pagehide', flushCounts);
 
   chrome.storage.local.get({ ...DEFAULTS, counts: {} }, (v) => {
     cfg = { ...DEFAULTS, ...v };
@@ -817,17 +858,17 @@
 
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local') return;
-    for (const k in ch) cfg[k] = ch[k].newValue;
+    for (const k in ch) if (k !== 'counts') cfg[k] = ch[k].newValue;
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
+    if ('dog' in ch) applyDog();
     if (('freq' in ch || 'pos' in ch || 'size' in ch || 'edge' in ch) && root) {
-      // 자리나 크기가 바뀌었으면 지금 떠 있는 건 비우고 새로 채운다
       if ('pos' in ch || 'size' in ch || 'edge' in ch) for (const b of [...live]) kill(b);
       if (!plan().max) { clearTimeout(nextT); for (const b of [...live]) kill(b); }
-      else { clearTimeout(nextT); nextT = setTimeout(fill, 250); }   // 바로 보여준다
+      else { clearTimeout(nextT); nextT = setTimeout(fill, 250); }
     }
     if ('enabled' in ch) {
       if (cfg.enabled) start();
-      else { sessionStorage.removeItem(SS); unmount(); }
+      else unmount();
     }
   });
 })();

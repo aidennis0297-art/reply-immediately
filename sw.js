@@ -119,7 +119,7 @@ async function fetchLines({ mode, ctx }) {
 }
 
 // 개한테 직접 물었을 때. 쿨다운도 캐시도 걸지 않는다 — 사용자가 기다리고 있으니까.
-async function ask({ mode, q, ctx }) {
+async function ask({ mode, q, ctx, history }) {
   const { apiKey } = await chrome.storage.local.get({ apiKey: '' });
   if (!apiKey) return { text: '나 아직 귀만 있고 머리가 없어... 팝업에서 API 키 넣어줘!' };
   const r = await fetch(API, {
@@ -129,6 +129,11 @@ async function ask({ mode, q, ctx }) {
       model: MODEL,
       messages: [
         { role: 'system', content: self.CB_ASK[mode] || self.CB_ASK.basic },
+        // 앞선 대화를 그대로 넣어 맥락을 잇는다. 새 대화를 고르면 비어서 온다.
+        ...(Array.isArray(history) ? history : []).flatMap((h) => [
+          { role: 'user', content: h.q },
+          { role: 'assistant', content: h.a },
+        ]),
         { role: 'user', content: `${userMsg(ctx)}\n\n[사용자 질문] ${q}` },
       ],
       temperature: 0.9,
@@ -160,13 +165,6 @@ async function pet() {
     line: level > before ? globalThis.CB_LINES.bond[level - 1] : null,
   };
 }
-
-// Alt+F (chrome://extensions/shortcuts 에서 바꿀 수 있다)
-chrome.commands?.onCommand.addListener((cmd, tab) => {
-  if (cmd === 'ask' && tab?.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'openAsk' }).catch(() => {});
-  }
-});
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (msg?.type === 'lines') {

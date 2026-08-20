@@ -1,5 +1,6 @@
 const DEFAULTS = { enabled: true, mode: 'basic', ai: true, freq: 3,
-                   follow: true, pos: 'both', size: 100, edge: 16, apiKey: '', pets: 0 };
+                   follow: true, pos: 'both', size: 100, edge: 16,
+                   dog: true, keepChat: true, apiKey: '', pets: 0 };
 const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
 const PER_PET = 10, MAX_PET = 1000;
 const $ = (id) => document.getElementById(id);
@@ -94,7 +95,9 @@ function showKey(v) {
 
 chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   showPower(c.enabled);
+  $('dog').checked = c.dog !== false;
   $('follow').checked = c.follow;
+  $('keepChat').checked = c.keepChat !== false;
   $('ai').checked = c.ai;
   $('apiKey').value = c.apiKey;
   paint($('modes'), c.mode);
@@ -108,7 +111,7 @@ chrome.storage.local.get({ ...DEFAULTS, archStat: null }, (c) => {
   showArchive(c.archStat);
 });
 
-for (const id of ['follow', 'ai']) {
+for (const id of ['dog', 'follow', 'keepChat', 'ai']) {
   $(id).onchange = (e) => save({ [id]: e.target.checked });
 }
 $('apiKey').onchange = (e) => {
