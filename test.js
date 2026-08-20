@@ -81,10 +81,8 @@ eval(fs.readFileSync(path.join(dir, 'prompts.js'), 'utf8'));
 for (const k of ['basic', 'commu', 'tsun', 'sunbi']) {
   assert.ok(self.CB_PROMPTS[k], k + ' 프롬프트 없음');
   assert.ok(self.CB_PROMPTS[k].includes('[출력 형식]'), k + ' 프롬프트에 출력 형식 없음');
-  // 강아지 질문 답변은 어떤 모드에서든 항상 골든 리트리버 강아지 말투여야 한다
   assert.ok(self.CB_ASK[k], k + ' 질문 프롬프트 없음');
-  assert.ok(self.CB_ASK[k].includes('골든 리트리버') && self.CB_ASK[k].includes('멍!'),
-    k + ' 질문 프롬프트가 강아지 말투가 아님');
+  assert.ok(self.CB_ASK[k].includes('[답변 규칙'), k + ' 질문 프롬프트에 답변 규칙 없음');
 }
 
 // ---- 스프라이트 ----

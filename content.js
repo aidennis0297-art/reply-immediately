@@ -781,11 +781,11 @@
     node.style.setProperty('--tail', (cx - left) + 'px');
   }
 
-  // 여러 줄 답변을 개가 한 줄씩 이어서 말한다 (강아지 전용 비트 아이콘과 골든 어투)
+  // 여러 줄 답변을 개가 한 줄씩 이어서 말한다
   function saySeries(parts) {
     const run = (i) => {
       if (!cfg.enabled || !root || i >= parts.length) return;
-      showSay(parts[i], 'answer', { persona: 'basic' });
+      showSay(parts[i], 'answer');
       clearTimeout(sayT);
       sayT = setTimeout(() => {
         if (i + 1 < parts.length) run(i + 1);
@@ -1428,10 +1428,11 @@
   function sendAsk() {
     const q = askInput.value.trim();
     if (!q) return;
+    const mode = activeMode();
     closeAsk(false);
     setState('listen');
     busy = true;
-    showSay('음... 냄새 맡아보는 중이다 멍!', 'answer', { persona: 'basic' });
+    showSay('음... 잠깐만!', 'answer');
     let done = false;
     const answer = (parts) => {
       if (done) return;
@@ -1446,15 +1447,15 @@
     };
     try {
       chrome.runtime.sendMessage(
-        { type: 'ask', mode: 'basic', q, ctx: pageContext(),
+        { type: 'ask', mode, q, ctx: pageContext(),
           history: cfg.keepChat === false ? [] : chat.slice(-4) },
         (r) => {
           void chrome.runtime.lastError;
-          answer(r?.parts?.length ? r.parts : [r?.text || '냄새 맡아봐도 잘 모르겠어 멍...']);
+          answer(r?.parts?.length ? r.parts : [r?.text || '잘 모르겠어...']);
         }
       );
-    } catch (_) { answer(['킁킁... 지금은 대답을 못 하겠어 멍...']); }
-    setTimeout(() => answer(['너무 오래 걸리네. 다시 물어봐줄래 멍?']), 15000);
+    } catch (_) { answer(['지금은 대답을 못 하겠어...']); }
+    setTimeout(() => answer(['너무 오래 걸리네. 다시 물어봐줄래?']), 15000);
   }
 
   function poke() {
