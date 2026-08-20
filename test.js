@@ -92,14 +92,23 @@ const refs = [
   ...mf.content_scripts.flatMap((c) => c.js),
   mf.action.default_popup,
   ...Object.values(mf.icons),
-  'fonts/Galmuri11.woff2',           // content.js 와 popup.html 이 이 경로를 쓴다
+  'fonts/Galmuri11.woff2',           // content.js 가 쓰는 전체 폰트
+  'fonts/Galmuri11-ui.woff2',        // popup.html 이 쓰는 서브셋
 ];
 for (const f of refs) {
   assert.ok(fs.existsSync(path.join(dir, f)), 'manifest/코드가 가리키는 파일이 없다: ' + f);
 }
-for (const f of ['content.js', 'popup.html']) {
-  assert.ok(fs.readFileSync(path.join(dir, f), 'utf8').includes('fonts/Galmuri11.woff2'),
-    f + ' 의 폰트 경로가 바뀌었다');
+assert.ok(fs.readFileSync(path.join(dir, 'content.js'), 'utf8').includes('fonts/Galmuri11.woff2'),
+  'content.js 의 폰트 경로가 바뀌었다');
+assert.ok(fs.readFileSync(path.join(dir, 'popup.html'), 'utf8').includes('fonts/Galmuri11-ui.woff2'),
+  'popup.html 은 가벼운 서브셋 폰트를 써야 한다');
+// 팝업에 나오는 글자가 서브셋에 다 들어 있는지 (없으면 그 글자만 다른 글꼴로 보인다)
+{
+  const html = fs.readFileSync(path.join(dir, 'popup.html'), 'utf8')
+    .replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '')
+    .replace(/<[^>]+>/g, ' ');
+  const ko = new Set([...html].filter((c) => c >= '가' && c <= '힣'));
+  assert.ok(ko.size > 30, '팝업 한글이 너무 적다 — 추출이 잘못됐다');
 }
 
 // ---- 애정도: 10번마다 한 칸, 1000번이면 만렙 ----

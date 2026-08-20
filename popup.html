@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <title>왈왈왈</title>
 <style>
-  @font-face { font-family: Galmuri11; src: url(fonts/Galmuri11.woff2) format('woff2');
+  /* 팝업 문구는 고정이라 쓰이는 글자만 담은 7KB 짜리로 충분하다.
+     전체 폰트(493KB)를 받으면 창이 늦게 뜬다. */
+  @font-face { font-family: Galmuri11; src: url(fonts/Galmuri11-ui.woff2) format('woff2');
                font-display: swap; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
