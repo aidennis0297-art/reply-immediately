@@ -11,6 +11,7 @@
   const DEFAULTS = {
     enabled: true, mode: 'basic', ai: true, freq: 3, follow: true,
     pos: 'both', size: 100, edge: 16, dog: true, keepChat: true, barW: 340,
+    dogPos: null,
   };
   const OLD_FREQ = { quiet: 0, normal: 3, chatty: 7 };   // 예전 설정값도 받아준다
   const CHAT_KEY = 'cheerBuddy.chat';
@@ -146,9 +147,9 @@
   const micHint = (t) => { if (footEl) footEl.firstChild.textContent = t || FOOT; };
   const live = new Set();
   const dog = { x: 60, dir: 1, state: 'sit', frame: 0, target: 0, acc: 0 };
-  let tickT = 0, nextT = 0, sayT = 0, tabT = 0, arrive = null, rec = null;
+  let tickT = 0, nextT = 0, sayT = 0, tabT = 0, posT = 0, arrive = null, rec = null;
   let recent = [], queue = [], lastFetch = 0, href = location.href;
-  let counts = {}, delta = {}, flushT = 0;
+  let counts = {}, delta = {}, flushT = 0, seq = 0;
   let idleSince = Date.now(), lastScroll = 0, busy = false, lastPoke = 0;
   let mouseX = null, mouseAt = 0, nextSide = Math.random() < 0.5 ? 'left' : 'right';
   let askOpen = false, chat = [];
@@ -233,6 +234,7 @@
                  { display: 'swap' })
       .load().then((f) => document.fonts.add(f)).catch(() => {});
 
+    loadDogPos();
     dog.x = clampX(dog.x);
     applyDog();
     render();
@@ -292,6 +294,7 @@
     if (location.href !== href) {
       // 페이지가 바뀌면 앞 페이지에서 만든 건 전부 버린다
       href = location.href; pageAt = now;
+      saveDogPos();
       queue = []; lastFetch = 0;
       for (const b of [...live]) drop(b);
       clearTimeout(sayT); say.hidden = true;
@@ -304,6 +307,7 @@
       const dx = dog.target - dog.x;
       if (Math.abs(dx) <= WALK_PX) {
         dog.x = dog.target; setState('sit');
+        clearTimeout(posT); posT = setTimeout(saveDogPos, 6000);
         if (arrive) { const f = arrive; arrive = null; f(); }
       } else {
         dog.dir = Math.sign(dx); dog.x += dog.dir * WALK_PX;
@@ -338,19 +342,22 @@
       }
       plain.push(s);
     }
-    return (fit.length && Math.random() < 0.65) ? fit : plain.concat(fit);
+    // 조건이 맞는 멘트는 수가 적다. 크기에 맞춰 우선순위를 준다 —
+    // 무조건 앞세우면 같은 몇 개가 돌고 돌아 금세 지겨워진다.
+    const bias = Math.min(0.45, fit.length / 40);
+    return (fit.length && Math.random() < bias) ? fit : plain.concat(fit);
   }
 
+  // 한 번 쓴 멘트는 줄 맨 뒤로 보낸다.
+  // counts[t] 는 '마지막으로 쓴 순번' — 작을수록 오래전에 썼다는 뜻.
   function leastUsed(list) {
     if (!list.length) return '';
-    if (Math.random() < 0.3) return pick(list);
-    let min = Infinity, best = [];
-    for (const t of list) {
-      const n = counts[t] || 0;
-      if (n < min) { min = n; best = [t]; }
-      else if (n === min) best.push(t);
-    }
-    return pick(best);
+    // 아직 한 번도 안 나온 게 있으면 그것부터. 풀을 한 바퀴 다 돈다.
+    const fresh = list.filter((t) => !counts[t]);
+    if (fresh.length) return pick(fresh);
+    // 다 돌았으면 가장 오래전에 쓴 쪽에서만 고른다.
+    const sorted = [...list].sort((a, b) => counts[a] - counts[b]);
+    return pick(sorted.slice(0, Math.max(3, Math.round(sorted.length * 0.12))));
   }
 
   function pickFrom(list) {
@@ -359,11 +366,11 @@
   }
 
   function remember(t) {
-    recent.push(t); if (recent.length > 24) recent.shift();
-    counts[t] = (counts[t] || 0) + 1;
-    delta[t] = (delta[t] || 0) + 1;
-    clearTimeout(flushT);
-    flushT = setTimeout(flushCounts, 12000);
+    recent.push(t); if (recent.length > 40) recent.shift();
+    counts[t] = ++seq;          // 방금 썼으니 맨 뒤로
+    delta[t] = counts[t];
+    // 말이 계속 나오면 타이머를 다시 걸지 않는다. 안 그러면 영원히 저장이 밀린다.
+    if (!flushT) flushT = setTimeout(() => { flushT = 0; flushCounts(); }, 12000);
   }
 
   function flushCounts() {
@@ -374,8 +381,10 @@
       chrome.storage.local.get({ counts: {} }, (v) => {
         void chrome.runtime.lastError;
         const merged = v.counts || {};
-        for (const k in d) merged[k] = (merged[k] || 0) + d[k];
+        // 탭이 여러 개면 순번이 엇갈릴 수 있다. 더 나중 것을 남긴다.
+        for (const k in d) merged[k] = Math.max(merged[k] || 0, d[k]);
         counts = merged;
+        seq = Math.max(seq, ...Object.values(merged));
         chrome.storage.local.set({ counts: merged });
       });
     } catch (_) { /* ignore */ }
@@ -637,6 +646,23 @@
     addEventListener('mouseup', up, true);
   }
 
+  // 페이지를 옮겨도 개는 있던 자리에서 이어진다
+  function saveDogPos() {
+    if (!root) return;
+    const p = { x: Math.round(dog.x), dir: dog.dir,
+                state: dog.state === 'walk' ? 'sit' : dog.state };
+    cfg.dogPos = p;
+    try { chrome.storage.local.set({ dogPos: p }); } catch (_) { /* ignore */ }
+  }
+
+  function loadDogPos() {
+    const p = cfg.dogPos;
+    if (!p || typeof p.x !== 'number') return;
+    dog.x = clampX(p.x);
+    dog.dir = p.dir === -1 ? -1 : 1;
+    if (['sit', 'stand', 'sleep'].includes(p.state)) dog.state = p.state;
+  }
+
   function saveCfg(o) {
     Object.assign(cfg, o);
     try { chrome.storage.local.set(o); } catch (_) { /* ignore */ }
@@ -838,7 +864,7 @@
     render();
   });
   addEventListener('visibilitychange', () => { if (!document.hidden) idleSince = Date.now(); });
-  addEventListener('pagehide', flushCounts);
+  addEventListener('pagehide', () => { flushCounts(); saveDogPos(); });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && askOpen) closeAsk(false);
   }, true);
@@ -853,12 +879,14 @@
   chrome.storage.local.get({ ...DEFAULTS, counts: {} }, (v) => {
     cfg = { ...DEFAULTS, ...v };
     counts = v.counts || {};
+    const used = Object.values(counts);
+    seq = used.length ? Math.max(...used) : 0;
     if (cfg.enabled) start();
   });
 
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local') return;
-    for (const k in ch) if (k !== 'counts') cfg[k] = ch[k].newValue;
+    for (const k in ch) if (k !== 'counts' && k !== 'dogPos') cfg[k] = ch[k].newValue;
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
     if ('dog' in ch) applyDog();
     if (('freq' in ch || 'pos' in ch || 'size' in ch || 'edge' in ch) && root) {

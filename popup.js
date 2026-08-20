@@ -161,7 +161,7 @@ $('expArch').onclick = () => {
     const out = {
       만든날: new Date().toISOString().slice(0, 10),
       사이트별멘트: d.archive,
-      멘트별출력횟수: d.counts,
+      멘트별마지막사용순번: d.counts,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)],
       { type: 'application/json' }));
