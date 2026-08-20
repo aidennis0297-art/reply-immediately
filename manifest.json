@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "왈왈왈 — 도트 응원단",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "도트 강아지가 화면 옆에서 응원하고, 8비트 뽀모도로 타이머와 효과음, 페르소나별 맞춤 대사를 선사합니다.",
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://integrate.api.nvidia.com/*"

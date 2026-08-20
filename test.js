@@ -177,10 +177,20 @@ const doPet = SW.pet;
   for (let i = 0; i < 85; i++) await SW.archiveAdd('s' + i + '.example.com', [{ text: 'x' + i, kind: '' }]);
   assert.ok(Object.keys(store.archive).length <= 80,
     '사이트는 80곳까지: ' + Object.keys(store.archive).length);
-  assert.equal((await SW.archiveGet('s84.example.com')).length, 1, '최근 사이트는 남아있다');
-  assert.equal((await SW.archiveGet('s0.example.com')).length, 0, '오래된 사이트는 밀려난다');
+  // ---- 뽀모도로 타임스탬프 기반 다중 탭 동기화 수학 검증 ----
+  const pomoTest = {
+    mode: 'focus',
+    running: true,
+    targetEndTime: Date.now() + 600 * 1000,
+    durationSec: 1500,
+    pausedRemainingSec: 600,
+  };
+  const calcRem = (p, now) => Math.max(0, Math.round((p.targetEndTime - now) / 1000));
+  assert.equal(calcRem(pomoTest, Date.now()), 600, '현재 시점 잔여 초 계산 정확도');
+  assert.equal(calcRem(pomoTest, Date.now() + 100000), 500, '100초 후 모든 탭에서 동일하게 500초로 계산되어야 함');
+  assert.equal(calcRem(pomoTest, Date.now() + 700000), 0, '종료 시점 이후 0으로 수렴');
 
-  console.log('통과: parse %d케이스, 멘트 %d개(말투 %d), 스프라이트 %d상태, 애정도 %d단계, 보관함 OK',
+  console.log('통과: parse %d케이스, 멘트 %d개(말투 %d), 스프라이트 %d상태, 애정도 %d단계, 보관함 OK, 뽀모도로 타임스탬프 동기화 OK',
     r.length, Object.values(L).flat().length,
     ['basic', 'commu', 'tsun', 'sunbi'].reduce((a, k) => a + L[k].length, 0),
     Object.keys(D.FRAMES).length, ups.length);

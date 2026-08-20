@@ -187,3 +187,37 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     return true;
   }
 });
+
+// ── 백그라운드 뽀모도로 브라우저 배지 동기화 ──
+function updateBadge(pomo) {
+  if (!pomo || !pomo.running || !pomo.targetEndTime) {
+    chrome.action.setBadgeText({ text: '' });
+    return;
+  }
+  const remMin = Math.max(0, Math.ceil((pomo.targetEndTime - Date.now()) / 60000));
+  if (remMin <= 0) {
+    chrome.action.setBadgeText({ text: 'DONE' });
+    chrome.action.setBadgeBackgroundColor({ color: '#52c41a' });
+  } else {
+    const prefix = pomo.mode === 'focus' ? '' : '☕';
+    chrome.action.setBadgeText({ text: `${prefix}${remMin}m` });
+    chrome.action.setBadgeBackgroundColor({ color: pomo.mode === 'focus' ? '#d4380d' : '#1890ff' });
+  }
+}
+
+try {
+  chrome.alarms.create('pomoBadge', { periodInMinutes: 1 });
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'pomoBadge') {
+      chrome.storage.local.get({ pomo: null }, (d) => {
+        if (d.pomo) updateBadge(d.pomo);
+      });
+    }
+  });
+} catch (_) {}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.pomo) {
+    updateBadge(changes.pomo.newValue);
+  }
+});

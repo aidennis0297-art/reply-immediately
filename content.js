@@ -293,16 +293,18 @@
     } catch (_) {}
   }
 
-  // ── 뽀모도로 상태 ──
-  let pomo = {
+  // ── 단일 진실 공급원 (Single Source of Truth) 뽀모도로 상태 ──
+  const POMO_DEFAULT = {
     mode: 'focus',        // 'focus' | 'break' | 'longBreak'
     running: false,
-    endTime: 0,
-    remaining: 25 * 60,
+    targetEndTime: 0,     // 유닉스 밀리초 타임스탬프 (Date.now() + rem*1000)
+    durationSec: 25 * 60,
+    pausedRemainingSec: 25 * 60,
     sets: 0,
     halfNotified: false,
     hudOpen: false,
   };
+  let pomo = { ...POMO_DEFAULT };
   let pomoEl, pomoPill, pomoHud, pomoClockEl, pomoProgEl, pomoStatusEl, pomoSetsEl, pomoBtnMain;
 
   let cfg = { ...DEFAULTS };
@@ -969,58 +971,101 @@
     return (cfg.pomoFocusMin || 25) * 60;
   }
 
+  function getPomoRemaining() {
+    if (!pomo.running || !pomo.targetEndTime) {
+      return pomo.pausedRemainingSec != null ? pomo.pausedRemainingSec : pomoDuration(pomo.mode);
+    }
+    return Math.max(0, Math.round((pomo.targetEndTime - Date.now()) / 1000));
+  }
+
   function setPomoMode(mode) {
-    pomo.mode = mode;
-    pomo.running = false;
-    pomo.remaining = pomoDuration(mode);
-    pomo.endTime = 0;
-    pomo.halfNotified = false;
-    savePomoState();
+    const dur = pomoDuration(mode);
+    const next = {
+      ...pomo,
+      mode,
+      running: false,
+      targetEndTime: 0,
+      durationSec: dur,
+      pausedRemainingSec: dur,
+      halfNotified: false,
+    };
+    pomo = next;
+    play8Bit('click');
     updatePomoUI();
+    chrome.storage.local.set({ pomo: next });
   }
 
   function togglePomoRunning() {
     if (pomo.running) {
-      pomo.running = false;
-      pomo.remaining = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
-      pomo.endTime = 0;
+      const rem = getPomoRemaining();
+      const next = {
+        ...pomo,
+        running: false,
+        targetEndTime: 0,
+        pausedRemainingSec: rem,
+      };
+      pomo = next;
       play8Bit('pause');
+      updatePomoUI();
+      chrome.storage.local.set({ pomo: next });
     } else {
-      pomo.running = true;
-      pomo.endTime = Date.now() + pomo.remaining * 1000;
+      const rem = pomo.pausedRemainingSec != null ? pomo.pausedRemainingSec : pomoDuration(pomo.mode);
+      const target = Date.now() + rem * 1000;
+      const dur = pomoDuration(pomo.mode);
+      const next = {
+        ...pomo,
+        running: true,
+        targetEndTime: target,
+        durationSec: dur,
+        pausedRemainingSec: rem,
+        halfNotified: rem <= Math.round(dur / 2) ? pomo.halfNotified : false,
+      };
+      pomo = next;
       play8Bit('start');
       if (pomo.mode === 'focus') sayPomo('focus_start');
       else sayPomo('break_start');
       for (const b of [...live]) kill(b);
       clearTimeout(nextT);
       nextT = setTimeout(fill, 200);
+      updatePomoUI();
+      chrome.storage.local.set({ pomo: next });
     }
-    savePomoState();
-    updatePomoUI();
   }
 
   function resetPomo() {
-    pomo.running = false;
-    pomo.remaining = pomoDuration(pomo.mode);
-    pomo.endTime = 0;
-    pomo.halfNotified = false;
-    savePomoState();
+    const dur = pomoDuration(pomo.mode);
+    const next = {
+      ...pomo,
+      running: false,
+      targetEndTime: 0,
+      durationSec: dur,
+      pausedRemainingSec: dur,
+      halfNotified: false,
+    };
+    pomo = next;
+    play8Bit('click');
     updatePomoUI();
+    chrome.storage.local.set({ pomo: next });
   }
 
   function skipPomo() {
-    if (pomo.mode === 'focus') {
-      pomo.sets++;
-      pomo.mode = (pomo.sets % 4 === 0) ? 'longBreak' : 'break';
-    } else {
-      pomo.mode = 'focus';
-    }
-    pomo.running = false;
-    pomo.remaining = pomoDuration(pomo.mode);
-    pomo.endTime = 0;
-    pomo.halfNotified = false;
-    savePomoState();
+    const nextMode = pomo.mode === 'focus' ? ((pomo.sets + 1) % 4 === 0 ? 'longBreak' : 'break') : 'focus';
+    const nextSets = pomo.mode === 'focus' ? pomo.sets + 1 : pomo.sets;
+    const dur = pomoDuration(nextMode);
+    const next = {
+      ...pomo,
+      mode: nextMode,
+      sets: nextSets,
+      running: false,
+      targetEndTime: 0,
+      durationSec: dur,
+      pausedRemainingSec: dur,
+      halfNotified: false,
+    };
+    pomo = next;
+    play8Bit('click');
     updatePomoUI();
+    chrome.storage.local.set({ pomo: next });
   }
 
   function sayPomo(phase) {
@@ -1032,47 +1077,70 @@
   }
 
   function checkPomoTick() {
-    if (!pomo.running) return;
-    const now = Date.now();
-    const rem = Math.max(0, Math.round((pomo.endTime - now) / 1000));
-    pomo.remaining = rem;
+    const rem = getPomoRemaining();
+    updatePomoUI(rem);
 
-    checkDistraction();
+    if (pomo.running && pomo.mode === 'focus') {
+      checkDistraction();
+    }
 
-    const total = pomoDuration(pomo.mode);
-    if (!pomo.halfNotified && pomo.mode === 'focus' && rem <= Math.round(total / 2) && rem > 0) {
+    if (!pomo.running || !pomo.targetEndTime) return;
+
+    const dur = pomo.durationSec || pomoDuration(pomo.mode);
+    if (!pomo.halfNotified && pomo.mode === 'focus' && rem <= Math.round(dur / 2) && rem > 0) {
       pomo.halfNotified = true;
       play8Bit('half');
       sayPomo('focus_half');
-      savePomoState();
+      chrome.storage.local.set({ pomo: { ...pomo, halfNotified: true } });
     }
 
     if (rem <= 0) {
-      pomo.running = false;
-      pomo.endTime = 0;
-      pomo.halfNotified = false;
       if (pomo.mode === 'focus') {
-        pomo.sets++;
+        const nextSets = (pomo.sets || 0) + 1;
         recordPomoCompletion();
         play8Bit('done');
         sayPomo('focus_done');
         popHearts(4);
-        pomo.mode = (pomo.sets % 4 === 0) ? 'longBreak' : 'break';
+        const nextMode = (nextSets % 4 === 0) ? 'longBreak' : 'break';
+        const durNext = pomoDuration(nextMode);
+        const next = {
+          ...pomo,
+          mode: nextMode,
+          sets: nextSets,
+          running: false,
+          targetEndTime: 0,
+          durationSec: durNext,
+          pausedRemainingSec: durNext,
+          halfNotified: false,
+        };
+        pomo = next;
+        updatePomoUI();
+        chrome.storage.local.set({ pomo: next });
       } else {
         play8Bit('break_done');
         sayPomo('break_done');
-        pomo.mode = 'focus';
+        const durNext = pomoDuration('focus');
+        const next = {
+          ...pomo,
+          mode: 'focus',
+          running: false,
+          targetEndTime: 0,
+          durationSec: durNext,
+          pausedRemainingSec: durNext,
+          halfNotified: false,
+        };
+        pomo = next;
+        updatePomoUI();
+        chrome.storage.local.set({ pomo: next });
       }
-      pomo.remaining = pomoDuration(pomo.mode);
-      savePomoState();
     }
-    updatePomoUI();
   }
 
-  function updatePomoUI() {
+  function updatePomoUI(forcedRem) {
     if (!pomoEl) return;
-    const min = Math.floor(pomo.remaining / 60);
-    const sec = pomo.remaining % 60;
+    const rem = typeof forcedRem === 'number' ? forcedRem : getPomoRemaining();
+    const min = Math.floor(rem / 60);
+    const sec = rem % 60;
     const timeStr = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     const modeLabel = pomo.mode === 'focus' ? '집중' : pomo.mode === 'break' ? '휴식' : '긴 휴식';
 
@@ -1080,17 +1148,17 @@
     if (pillText) {
       pillText.textContent = `${pomo.mode === 'focus' ? '🍅' : '☕'} ${timeStr} ${pomo.running ? '⏸' : '▶'}`;
     }
-    pomoPill?.classList.toggle('running', pomo.running);
+    pomoPill?.classList.toggle('running', !!pomo.running);
 
     if (pomoClockEl) pomoClockEl.textContent = timeStr;
     if (pomoStatusEl) {
       pomoStatusEl.textContent = pomo.running
         ? `${modeLabel} 진행 중!`
-        : `${modeLabel} 준비 중 (${pomoDuration(pomo.mode) / 60}분)`;
+        : `${modeLabel} 준비 중 (${Math.round(pomoDuration(pomo.mode) / 60)}분)`;
     }
     if (pomoProgEl) {
-      const total = pomoDuration(pomo.mode);
-      const prog = Math.min(100, Math.max(0, Math.round(((total - pomo.remaining) / total) * 100)));
+      const total = pomo.durationSec || pomoDuration(pomo.mode);
+      const prog = Math.min(100, Math.max(0, Math.round(((total - rem) / total) * 100)));
       pomoProgEl.style.width = prog + '%';
     }
     if (pomoHud) {
@@ -1106,7 +1174,7 @@
       pomoBtnMain.className = pomo.running ? 'btn-sub' : 'btn-main';
     }
     if (pomoSetsEl) {
-      const count = pomo.sets;
+      const count = pomo.sets || 0;
       const icons = '🍅 '.repeat(count % 4) + '⚪ '.repeat(4 - (count % 4));
       pomoSetsEl.textContent = `오늘 달성: ${icons.trim()} (${count}세트)`;
     }
@@ -1130,32 +1198,18 @@
     pomoEl.hidden = cfg.pomoOn === false;
   }
 
-  function savePomoState() {
-    const s = {
-      pomoMode: pomo.mode,
-      pomoRunning: pomo.running,
-      pomoEndTime: pomo.endTime,
-      pomoRemaining: pomo.remaining,
-      pomoSets: pomo.sets,
-      pomoHalfNotified: pomo.halfNotified,
-    };
-    try { sessionStorage.setItem('cheerBuddy.pomo', JSON.stringify(s)); } catch (_) {}
-    try { chrome.storage.local.set(s); } catch (_) {}
-  }
-
   function loadPomoState(data) {
     if (!data) return;
-    if (data.pomoMode) pomo.mode = data.pomoMode;
-    if (typeof data.pomoSets === 'number') pomo.sets = data.pomoSets;
-    if (typeof data.pomoHalfNotified === 'boolean') pomo.halfNotified = data.pomoHalfNotified;
-    if (data.pomoRunning && data.pomoEndTime > Date.now()) {
-      pomo.running = true;
-      pomo.endTime = data.pomoEndTime;
-      pomo.remaining = Math.max(0, Math.round((pomo.endTime - Date.now()) / 1000));
-    } else if (typeof data.pomoRemaining === 'number') {
-      pomo.running = false;
-      pomo.remaining = data.pomoRemaining;
-      pomo.endTime = 0;
+    if (data.pomo) {
+      Object.assign(pomo, data.pomo);
+    } else {
+      if (data.pomoMode) pomo.mode = data.pomoMode;
+      if (typeof data.pomoSets === 'number') pomo.sets = data.pomoSets;
+      if (typeof data.pomoHalfNotified === 'boolean') pomo.halfNotified = data.pomoHalfNotified;
+      if (typeof data.pomoTargetEndTime === 'number') pomo.targetEndTime = data.pomoTargetEndTime;
+      if (typeof data.pomoDurationSec === 'number') pomo.durationSec = data.pomoDurationSec;
+      if (typeof data.pomoPausedRemainingSec === 'number') pomo.pausedRemainingSec = data.pomoPausedRemainingSec;
+      if (typeof data.pomoRunning === 'boolean') pomo.running = data.pomoRunning;
     }
     updatePomoUI();
   }
@@ -1221,23 +1275,34 @@
     addEventListener('mouseup', up, true);
   }
 
-  // 페이지를 옮겨도 개는 있던 자리에서 이어진다 (세션 캐시로 0ms 즉시 복원)
+  // 페이지를 옮겨도 개는 있던 자리에서 이어진다 (반응형 비율 기반 0ms 즉시 복원)
   function saveDogPos() {
     if (!root) return;
-    const p = { x: Math.round(dog.x), dir: dog.dir,
-                state: dog.state === 'walk' ? 'sit' : dog.state };
+    const maxW = Math.max(10, innerWidth - DOG_W);
+    const ratio = Math.max(0, Math.min(1, dog.x / maxW));
+    const p = {
+      x: Math.round(dog.x),
+      ratio,
+      dir: dog.dir,
+      state: dog.state === 'walk' ? 'sit' : dog.state,
+    };
     cfg.dogPos = p;
     try { sessionStorage.setItem('cheerBuddy.dogPos', JSON.stringify(p)); } catch (_) {}
     try { chrome.storage.local.set({ dogPos: p }); } catch (_) { /* ignore */ }
   }
 
-  function loadDogPos() {
-    let p = cfg.dogPos;
+  function loadDogPos(customPos) {
+    let p = customPos || cfg.dogPos;
     if (!p) {
       try { p = JSON.parse(sessionStorage.getItem('cheerBuddy.dogPos') || 'null'); } catch (_) {}
     }
-    if (!p || typeof p.x !== 'number') return;
-    dog.x = clampX(p.x);
+    if (!p) return;
+    const maxW = Math.max(10, innerWidth - DOG_W);
+    if (typeof p.ratio === 'number') {
+      dog.x = clampX(p.ratio * maxW);
+    } else if (typeof p.x === 'number') {
+      dog.x = clampX(p.x);
+    }
     dog.dir = p.dir === -1 ? -1 : 1;
     if (['sit', 'stand', 'sleep'].includes(p.state)) dog.state = p.state;
   }
@@ -1523,17 +1588,17 @@
 
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== 'local') return;
-    for (const k in ch) if (k !== 'counts' && k !== 'dogPos') cfg[k] = ch[k].newValue;
+    for (const k in ch) if (k !== 'counts' && k !== 'dogPos' && k !== 'pomo') cfg[k] = ch[k].newValue;
     try { sessionStorage.setItem('cheerBuddy.cfg', JSON.stringify(cfg)); } catch (_) {}
     if ('mode' in ch) { queue = []; recent = []; lastFetch = 0; }
     if ('dog' in ch) applyDog();
     if ('pomoOn' in ch) applyPomoVisibility();
-    if ('pomoMode' in ch || 'pomoRunning' in ch || 'pomoEndTime' in ch || 'pomoRemaining' in ch || 'pomoSets' in ch) {
-      const updated = {};
-      for (const k of ['pomoMode', 'pomoRunning', 'pomoEndTime', 'pomoRemaining', 'pomoSets', 'pomoHalfNotified']) {
-        if (k in ch) updated[k] = ch[k].newValue;
-      }
-      loadPomoState(updated);
+    if ('pomo' in ch) {
+      loadPomoState(ch.pomo.newValue);
+    }
+    if ('dogPos' in ch && !document.hasFocus() && ch.dogPos.newValue) {
+      loadDogPos(ch.dogPos.newValue);
+      render();
     }
     if (('freq' in ch || 'pos' in ch || 'size' in ch || 'edge' in ch) && root) {
       if ('pos' in ch || 'size' in ch || 'edge' in ch) for (const b of [...live]) kill(b);
